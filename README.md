@@ -1,6 +1,10 @@
-# fx
+# shr-fx
 
 A standalone, wet-only send/return rack for a 40×13 touchscreen terminal.
+The Cargo package, executable and repository are named `shr-fx`.
+The launcher gadget ID stays `fx`; JACK/ALSA identities, `FX_DATA_ROOT` and
+the existing private data directories retain that stable ID.
+
 Two independent engines provide a stereo delay (including ping-pong) and a
 compact room reverb. Rust, ratatui/crossterm, JACK audio and input-only ALSA
 Sequencer MIDI. The mixer keeps the dry signal.
@@ -18,7 +22,7 @@ compiler, pkg-config, JACK development headers and ALSA development headers
 
 ```sh
 cargo build --release --locked
-./target/release/fx
+./target/release/shr-fx
 ```
 
 Default startup is **offline**: the complete interface, sound storage and
@@ -28,11 +32,11 @@ played. The app does not change the terminal font, tty setup or JACK settings.
 For an explicitly authorized live session, start it with:
 
 ```sh
-./target/release/fx --audio --midi
+./target/release/shr-fx --audio --midi
 ```
 
-Both flags are independent. JACK must already be running; fx never starts,
-restarts or reconfigures it. With no saved physical assignments, fx attaches
+Both flags are independent. JACK must already be running; shr-fx never starts,
+restarts or reconfigures it. With no saved physical assignments, shr-fx attaches
 with unconnected, silent ports. The exact client name is `fx`; an existing
 client of that name causes a visible failure instead of a suffixed duplicate.
 
@@ -116,7 +120,7 @@ four inputs. Switching layouts preserves explicit slot choices, which may need
 repair before Apply. Inactive R fields are stored but do not route audio.
 Shared stereo explicitly uses A's L/R fields for both engines.
 
-Lost or extra connections mute only dependent engines. fx never removes an
+Lost or extra connections mute only dependent engines. shr-fx never removes an
 unrelated connection to fix ambiguity. Repair it with the graph owner, or
 reapply the intended exact assignments. Physical Apply first checks all names,
 directions, duplicates and required slots, then acknowledges silence before
@@ -209,7 +213,7 @@ cargo fmt --all -- --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
 cargo build --release --locked
-python3 scripts/smoke_terminal.py target/release/fx
+python3 scripts/smoke_terminal.py target/release/shr-fx
 ```
 
 The normal suite contains fast production routing, DSP, safety, allocation,
@@ -224,9 +228,9 @@ See [the implementation plan](docs/PLAN.md), [architecture and ownership](docs/A
 and [remaining live acceptance](docs/ACCEPTANCE.md). Offline simulation does not
 establish callback scheduling, xruns, listening quality or physical latency.
 
-Visible Exit, `q`, Ctrl-C, SIGINT, SIGTERM and SIGHUP stop only fx. It requests
+Visible Exit, `q`, Ctrl-C, SIGINT, SIGTERM and SIGHUP stop only shr-fx. It requests
 silence, waits up to 150 ms for callback acknowledgement, deactivates/joins the
 owned JACK client, closes its MIDI input, frees buffers off-thread and returns
 to the caller. Normal exit and handled errors restore raw mode, cursor, mouse
 reporting and the alternate screen. It never stops the JACK server or changes
-services. Run directly or let `go` launch/wait for the ordinary `fx` executable.
+services. Run directly or let `go` launch/wait for the ordinary `shr-fx` executable.

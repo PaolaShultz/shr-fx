@@ -12,7 +12,7 @@ import tempfile
 import termios
 import time
 
-binary = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "target/release/fx")
+binary = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "target/release/shr-fx")
 
 
 def run_case(method):

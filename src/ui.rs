@@ -1315,9 +1315,9 @@ pub fn draw<B: Backend>(frame: &mut Frame<B>, app: &App) {
         0,
         20,
         if app.audio.is_some() {
-            "fx  WET ONLY"
+            "shr-fx WET ONLY"
         } else {
-            "fx WET ONLY OFFLINE"
+            "shr-fx WET OFFLINE"
         },
         Style::default()
             .fg(Color::Cyan)

@@ -1,4 +1,4 @@
-use fx::model::{Availability, Layout, Rack, Routing, Source};
+use shr_fx::model::{Availability, Layout, Rack, Routing, Source};
 fn route(layout: Layout, a: Source, b: Source) -> Routing {
     let outputs = match layout {
         Layout::DualMono => [[0, 1], [3, 2]],

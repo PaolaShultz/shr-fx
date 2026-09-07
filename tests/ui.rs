@@ -1,9 +1,9 @@
-use fx::{
+use ratatui::{Terminal, backend::TestBackend};
+use shr_fx::{
     midi::Action,
     storage::LocalConfig,
     ui::{self, App, Command, Page},
 };
-use ratatui::{Terminal, backend::TestBackend};
 fn app() -> App {
     App::new(
         std::env::temp_dir().join("fx-unused-ui-test"),

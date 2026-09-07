@@ -1,5 +1,5 @@
 //! Opt-in offline evidence only. This does not open JACK/ALSA or render files.
-use fx::{
+use shr_fx::{
     dsp::Processor,
     model::{Algorithm, Availability, Rack},
 };

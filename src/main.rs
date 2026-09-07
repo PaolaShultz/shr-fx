@@ -7,12 +7,12 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use fx::{
+use ratatui::{Terminal, backend::CrosstermBackend};
+use shr_fx::{
     midi::Action,
     storage,
     ui::{self, App, Command},
 };
-use ratatui::{Terminal, backend::CrosstermBackend};
 use std::{
     io,
     path::PathBuf,
@@ -23,7 +23,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const HELP: &str = "fx 0.1.0 — standalone wet-only send effects rack\n\nUsage: fx [--audio] [--midi] [--data-root DIR]\n       fx --help | --version\n\nDefault: offline 40x13 touch interface; no JACK or MIDI access.\n--audio          Attach to existing JACK only; never start a server.\n--midi           Enable ALSA Sequencer input, using an explicit source.\n--data-root DIR  Private sounds/settings (also FX_DATA_ROOT).\n\nTouch: select engine/field; -/+ edits a draft; Apply or Cancel.\nKeyboard: Tab/Up/Down focus, Enter activate, Left/Right adjust,\nEsc cancel, a/b engine, t tap, w wet bypass, m mute, Space panic,\nr routing, s sounds, q exit. Ctrl-C/SIGTERM stop and restore terminal.\n\nMore > Ports selects exact JACK names. More > MIDI selects an input\nand learns notes/CCs. No MIDI is transmitted. See README.md.\n";
+const HELP: &str = "shr-fx 0.1.0 — standalone wet-only send effects rack\n\nUsage: shr-fx [--audio] [--midi] [--data-root DIR]\n       shr-fx --help | --version\n\nDefault: offline 40x13 touch interface; no JACK or MIDI access.\n--audio          Attach to existing JACK only; never start a server.\n--midi           Enable ALSA Sequencer input, using an explicit source.\n--data-root DIR  Private sounds/settings (also FX_DATA_ROOT).\n\nTouch: select engine/field; -/+ edits a draft; Apply or Cancel.\nKeyboard: Tab/Up/Down focus, Enter activate, Left/Right adjust,\nEsc cancel, a/b engine, t tap, w wet bypass, m mute, Space panic,\nr routing, s sounds, q exit. Ctrl-C/SIGTERM stop and restore terminal.\n\nMore > Ports selects exact JACK names. More > MIDI selects an input\nand learns notes/CCs. No MIDI is transmitted. See README.md.\n";
 struct Args {
     root: PathBuf,
     audio: bool,
@@ -41,7 +41,7 @@ fn args() -> Result<Option<Args>, String> {
                 return Ok(None);
             }
             "--version" | "-V" => {
-                println!("fx {}", env!("CARGO_PKG_VERSION"));
+                println!("shr-fx {}", env!("CARGO_PKG_VERSION"));
                 return Ok(None);
             }
             "--audio" => audio = true,
@@ -181,7 +181,7 @@ fn run(args: Args) -> Result<(), String> {
 fn main() {
     let result = args().and_then(|args| args.map_or(Ok(()), run));
     if let Err(error) = result {
-        eprintln!("fx: {error}");
+        eprintln!("shr-fx: {error}");
         std::process::exit(1);
     }
 }

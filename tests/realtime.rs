@@ -1,4 +1,4 @@
-use fx::{
+use shr_fx::{
     audio::{CallbackCore, Command, Shared},
     model::{Algorithm, Availability, Rack},
 };
@@ -140,7 +140,7 @@ fn stale_availability_cannot_replace_newer_graph_inspection() {
 fn maximum_rate_preparation_stays_within_eight_mib_dsp_budget() {
     BYTES.with(|c| c.set(0));
     TRACK.with(|c| c.set(true));
-    let processor = fx::dsp::Processor::new(192000, Rack::default()).unwrap();
+    let processor = shr_fx::dsp::Processor::new(192000, Rack::default()).unwrap();
     TRACK.with(|c| c.set(false));
     let bytes = BYTES.with(Cell::get);
     assert!(

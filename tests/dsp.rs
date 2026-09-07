@@ -1,4 +1,4 @@
-use fx::{
+use shr_fx::{
     dsp::{MAX_FRAMES, Processor},
     model::{Algorithm, Availability, EngineConfig, Layout, Rack, Source},
 };
@@ -19,7 +19,7 @@ fn block(
     p: &mut Processor,
     input: &[[f32; 4]],
     available: Availability,
-) -> (Vec<[f32; 4]>, fx::dsp::Meters) {
+) -> (Vec<[f32; 4]>, shr_fx::dsp::Meters) {
     let ins: [Vec<f32>; 4] = std::array::from_fn(|c| input.iter().map(|v| v[c]).collect());
     let mut outs: [Vec<f32>; 4] = std::array::from_fn(|_| vec![99.0; input.len()]);
     let meters = p.process(

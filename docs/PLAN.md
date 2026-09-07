@@ -53,3 +53,9 @@ and acceptance evidence. The release executable starts offline by default.
 The normal suite has 46 passing tests. The new offline cost simulator was
 validated once and remains opt-in. Live acceptance and expansion of the sound
 palette remain the explicitly separated next stage in `docs/ACCEPTANCE.md`.
+
+## Project naming
+
+The project, Cargo package, executable and local repository directory are
+`shr-fx`. The launcher gadget ID remains `fx`; existing JACK/ALSA names and
+private data locations continue to use that ID.

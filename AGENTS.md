@@ -1,4 +1,4 @@
-# fx — standalone dual-engine send-effects rack
+# shr-fx — standalone dual-engine send-effects rack
 
 ## Product and scope
 
@@ -207,8 +207,10 @@ spaces and combinations that meet the measured budget and sound useful.
 
 ## Shared launcher boundary
 
-Use stable gadget IDs `rec`, `fx`, and `daw`; `go` is the launcher. New gadgets
-must run directly without the launcher and return to their caller on a visible
+Use stable gadget IDs `rec`, `fx`, and `daw`; `go` is the launcher.
+This project and repository are `shr-fx`; its executable is `shr-fx`, while
+its stable launcher gadget ID remains `fx`.
+New gadgets must run directly without the launcher and return to their caller on a visible
 keyboardless Exit action. Expose ordinary executable/arguments, `--help`,
 `--version`, a configurable private data root, and a documented graceful
 shutdown behavior. Do not require a launcher SDK, daemon, network API, or a

@@ -1,4 +1,4 @@
-use fx::{
+use shr_fx::{
     audio::{PortGraph, connections, edit_connections},
     storage::Ports,
 };

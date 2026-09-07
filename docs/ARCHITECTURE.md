@@ -44,7 +44,7 @@ this initial UI.
 A port audit every 250 ms checks exact counterpart names and connection counts.
 Notifications immediately invalidate the affected owned slot. An atomic graph
 generation prevents an in-flight audit from restoring availability from stale
-observations. Unrelated clients' graph edits do not invalidate fx. Unexpected
+observations. Unrelated clients' graph edits do not invalidate shr-fx. Unexpected
 extra links are visible ambiguity, never a reason to disconnect another owner's
 links. Physical Apply preflights before requesting callback silence, retains
 exact old connection pairs, and rolls back only pairs this operation changed.

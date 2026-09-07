@@ -6,6 +6,6 @@ check:
 release:
 	cargo build --release --locked
 smoke: release
-	python3 scripts/smoke_terminal.py target/release/fx
+	python3 scripts/smoke_terminal.py target/release/shr-fx
 soak:
 	cargo test --release --locked --test soak -- --ignored --nocapture

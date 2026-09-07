@@ -1,4 +1,4 @@
-use fx::{
+use shr_fx::{
     midi::{
         Action, Binding, Clock, Control, ControlKind, Mapper, Message, Parameter, TapTempo, Target,
     },
@@ -206,7 +206,7 @@ fn failed_load_and_cancel_keep_complete_active_rack() {
     app.draft.routing.outputs[1][0] = app.draft.routing.outputs[0][0];
     app.handle(Command::Apply);
     assert_eq!(app.rack, original);
-    assert_eq!(app.page, fx::ui::Page::Routing);
+    assert_eq!(app.page, shr_fx::ui::Page::Routing);
 }
 #[test]
 fn private_config_rejects_duplicates_and_atomic_save_is_private() {
