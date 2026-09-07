@@ -1,0 +1,5 @@
+/target/
+/user/
+/.local/
+*.wav
+*.log
