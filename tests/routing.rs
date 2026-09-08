@@ -101,7 +101,7 @@ fn invalid_slots_duplicate_returns_and_missing_ports_are_rejected() {
     r.inputs[0] = Source::Mono(9);
     assert!(r.validate(Availability::ALL).is_err());
     let mut rack = Rack::default();
-    rack.engines[0].feedback = f32::NAN;
+    rack.engines[0].stages[0].delay.feedback = f32::NAN;
     assert!(rack.validate(Availability::ALL).is_err());
 }
 #[test]

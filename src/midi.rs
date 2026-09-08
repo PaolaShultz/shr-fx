@@ -19,6 +19,12 @@ use std::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Action {
+    PreviousEffect,
+    NextEffect,
+    ParameterPage,
+    SwitchEngine,
+    MenuConfirm,
+    SlotBypass(u8),
     Prev,
     Next,
     Confirm,
@@ -37,9 +43,10 @@ pub enum Action {
     Exit,
     Save,
     Load,
+    Effects,
 }
 impl Action {
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 19] = [
         Self::Prev,
         Self::Next,
         Self::Confirm,
@@ -58,9 +65,16 @@ impl Action {
         Self::Exit,
         Self::Save,
         Self::Load,
+        Self::Effects,
     ];
     pub fn label(self) -> &'static str {
         match self {
+            Self::PreviousEffect => "Previous effect",
+            Self::NextEffect => "Next effect",
+            Self::ParameterPage => "Parameter page",
+            Self::SwitchEngine => "Switch engine",
+            Self::MenuConfirm => "Menu/Confirm",
+            Self::SlotBypass(_) => "Slot off/on",
             Self::Prev => "Previous",
             Self::Next => "Next",
             Self::Confirm => "Confirm",
@@ -79,12 +93,14 @@ impl Action {
             Self::Exit => "Exit",
             Self::Save => "Save",
             Self::Load => "Load",
+            Self::Effects => "Effects",
         }
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum Parameter {
+    Slot { slot: u8, control: SlotParameter },
     Time,
     Feedback,
     Damping,
@@ -99,19 +115,91 @@ impl Parameter {
         Self::Level,
         Self::Bpm,
     ];
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Time => "Time",
-            Self::Feedback => "Feedback",
-            Self::Damping => "Damping",
-            Self::Level => "Return level",
-            Self::Bpm => "BPM",
+    pub fn choices() -> Vec<Self> {
+        let mut choices = Self::ALL.to_vec();
+        for slot in 0..crate::model::MAX_STAGES as u8 {
+            for control in SlotParameter::ALL {
+                choices.push(Self::Slot { slot, control });
+            }
         }
+        choices
+    }
+    pub fn label(self) -> String {
+        match self {
+            Self::Time => "Slot 1 time/rate".into(),
+            Self::Feedback => "Slot 1 feedback/depth".into(),
+            Self::Damping => "Slot 1 damping/base".into(),
+            Self::Level => "Return level".into(),
+            Self::Bpm => "BPM".into(),
+            Self::Slot { slot, control } => format!("Slot {} {}", slot + 1, control.label()),
+        }
+    }
+    fn valid(self) -> bool {
+        !matches!(self, Self::Slot { slot, .. } if slot as usize >= crate::model::MAX_STAGES)
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SlotParameter {
+    DelaySync,
+    DelayDivision,
+    DelayTime,
+    DelayFeedback,
+    DelayDamping,
+    Predelay,
+    Decay,
+    ReverbDamping,
+    ChorusRate,
+    ChorusDepth,
+    ChorusBase,
+    Level,
+    ExciterTune,
+    ExciterDrive,
+    ExciterTone,
+}
+impl SlotParameter {
+    pub const ALL: [Self; 15] = [
+        Self::DelaySync,
+        Self::DelayDivision,
+        Self::DelayTime,
+        Self::DelayFeedback,
+        Self::DelayDamping,
+        Self::Predelay,
+        Self::Decay,
+        Self::ReverbDamping,
+        Self::ChorusRate,
+        Self::ChorusDepth,
+        Self::ChorusBase,
+        Self::Level,
+        Self::ExciterTune,
+        Self::ExciterDrive,
+        Self::ExciterTone,
+    ];
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::DelaySync => "delay sync",
+            Self::DelayDivision => "delay division",
+            Self::DelayTime => "delay time",
+            Self::DelayFeedback => "delay feedback",
+            Self::DelayDamping => "delay damping",
+            Self::Predelay => "predelay",
+            Self::Decay => "decay",
+            Self::ReverbDamping => "reverb damping",
+            Self::ChorusRate => "chorus rate",
+            Self::ChorusDepth => "chorus depth",
+            Self::ChorusBase => "chorus base",
+            Self::Level => "wet level",
+            Self::ExciterTune => "exciter tune",
+            Self::ExciterDrive => "exciter drive",
+            Self::ExciterTone => "exciter tone",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum Target {
+    Surface(crate::surface::Role),
     Action(Action),
     Parameter { engine: u8, parameter: Parameter },
 }
@@ -136,12 +224,26 @@ impl Binding {
         if self.channel >= 16 || self.number >= 128 {
             return Err("MIDI channel/number out of range".into());
         }
+        if matches!(self.target, Target::Action(Action::SlotBypass(i)) if i >= 8) {
+            return Err("Slot out of range".into());
+        }
         match self.target {
+            Target::Surface(role)
+                if role.valid()
+                    && role.rotary()
+                        == matches!(
+                            self.kind,
+                            ControlKind::AbsoluteCc | ControlKind::RelativeCc
+                        ) =>
+            {
+                Ok(())
+            }
             Target::Action(_) if matches!(self.kind, ControlKind::Note | ControlKind::ButtonCc) => {
                 Ok(())
             }
-            Target::Parameter { engine, .. }
+            Target::Parameter { engine, parameter }
                 if engine < 2
+                    && parameter.valid()
                     && matches!(self.kind, ControlKind::AbsoluteCc | ControlKind::RelativeCc) =>
             {
                 Ok(())
@@ -185,6 +287,11 @@ pub struct Packet {
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Control {
+    Surface {
+        role: crate::surface::Role,
+        value: u8,
+        kind: ControlKind,
+    },
     Action(Action),
     Absolute {
         engine: usize,
@@ -204,6 +311,10 @@ pub struct Mapper {
     buttons: [[bool; 128]; 16],
     previous: [Option<f32>; 64],
     picked: [bool; 64],
+    targets: [Option<Target>; 64],
+    pub pickup: Option<(usize, bool)>,
+    pub last_binding: Option<usize>,
+    pub press_edge: bool,
 }
 impl Default for Mapper {
     fn default() -> Self {
@@ -212,18 +323,37 @@ impl Default for Mapper {
             buttons: [[false; 128]; 16],
             previous: [None; 64],
             picked: [false; 64],
+            targets: [None; 64],
+            pickup: None,
+            last_binding: None,
+            press_edge: false,
         }
     }
 }
 impl Mapper {
+    pub fn pickup_direction(&self, index: usize, target: f32) -> Option<bool> {
+        if self.picked[index] {
+            None
+        } else {
+            self.previous[index].map(|value| value < target)
+        }
+    }
     pub fn require_releases(&mut self) {
         self.notes = [[true; 128]; 16];
         self.buttons = [[true; 128]; 16];
         self.reset_pickup();
     }
+    pub fn invalidate(&mut self, index: usize) {
+        self.previous[index] = None;
+        self.picked[index] = false;
+        if self.pickup.is_some_and(|(i, _)| i == index) {
+            self.pickup = None;
+        }
+    }
     pub fn reset_pickup(&mut self) {
         self.previous = [None; 64];
         self.picked = [false; 64];
+        self.pickup = None;
     }
     pub fn map(
         &mut self,
@@ -231,6 +361,17 @@ impl Mapper {
         bindings: &[Binding],
         current: impl Fn(usize, Parameter) -> f32,
     ) -> Option<Control> {
+        self.map_surface(message, bindings, |_| None, current)
+    }
+    pub fn map_surface(
+        &mut self,
+        message: Message,
+        bindings: &[Binding],
+        resolve: impl Fn(crate::surface::Role) -> Option<Target>,
+        current: impl Fn(usize, Parameter) -> f32,
+    ) -> Option<Control> {
+        self.last_binding = None;
+        self.press_edge = false;
         let (channel, number, value, note) = match message {
             Message::Note {
                 channel,
@@ -255,11 +396,26 @@ impl Mapper {
         let pressed = if note { value > 0 } else { value >= 64 };
         let edge = pressed && !*held;
         *held = pressed;
+        self.press_edge = edge;
         for (index, b) in bindings.iter().take(64).enumerate() {
             if b.channel != channel || b.number != number || (b.kind == ControlKind::Note) != note {
                 continue;
             }
-            return match b.target {
+            self.last_binding = Some(index);
+            let resolved = match b.target {
+                Target::Surface(role) => resolve(role),
+                target => Some(target),
+            };
+            if self.targets[index] != resolved {
+                self.invalidate(index);
+                self.targets[index] = resolved;
+            }
+            return match resolved? {
+                Target::Surface(role) => Some(Control::Surface {
+                    role,
+                    value,
+                    kind: b.kind,
+                }),
                 Target::Action(action) => {
                     if edge {
                         Some(Control::Action(action))
@@ -294,12 +450,14 @@ impl Mapper {
                         self.picked[index] |= (value - target).abs() <= 0.025 || crosses;
                         self.previous[index] = Some(value);
                         if self.picked[index] {
+                            self.pickup = None;
                             Some(Control::Absolute {
                                 engine,
                                 parameter,
                                 value,
                             })
                         } else {
+                            self.pickup = Some((index, value < target));
                             Some(Control::Pickup)
                         }
                     }

@@ -16,13 +16,29 @@ forming slices; each registered port owns a distinct buffer. A missing buffer
 removes dependent engines, preserving a healthy separate/shared contribution.
 An unsupported block size clears all supplied outputs without processing.
 
-Each engine preallocates a maximum two-second stereo delay, a 200 ms stereo room
-predelay, four combs and two allpasses per side. Maximum-rate DSP preparation is tested against an 8 MiB allocation budget.
-Both algorithms stay prepared;
-there is one active algorithm per engine, no second rack and no structural
-allocation/retirement during performance. Only scalars are published. All DSP
-buffers are freed by the owner after deactivation joins the callback. Logical
-clears reset ring validity and positions; they do not walk or free delay memory.
+Each engine owns eight independent prepared slots. A slot has a maximum
+two-second stereo delay, two delay diffusers per side, 200 ms stereo reverb
+predelay, four combs (120 ms capacity) and six reverb allpasses per side, and
+40 ms stereo chorus storage. Exciter adds fixed filter/oversampling arrays.
+Profiles change scalar lengths within those capacities; no callback resizing occurs. Maximum-rate preparation allocates
+70,131,200 heap bytes (66.88 MiB) including stereo scratch, below the 80 MiB
+budget enforced by normal allocation tests.
+All families remain prepared, including inactive slots.
+
+Single uses slot 1. MultiFX uses 2–8 parallel slots, all reading the
+same engine input. Each wet branch has its own smoothed level and excitation
+ramp, then 1/max(3, configured slot count) gain. The sum passes through engine
+return level and existing physical-return headroom. Slot bypass does not renormalize the sum.
+No slot consumes another slot's result and no serial topology is stored.
+There are at most sixteen active algorithms and no crossfade overlap of algorithms.
+
+Slot structural edits fade/clear only that slot. Mode/count edits fade/clear
+the selected engine. Level/bypass edits preserve other branches. A slot fault
+latches the owning engine's fault and removes its complete period contribution,
+preserving the other engine even on shared returns. Logical clears reset ring
+validity/positions, without walking or freeing sample memory. Buffers are freed
+off-thread after deactivation joins the callback. Chorus/tape modulation starts
+from fixed per-slot phases; it is repeatable and independent of UI timing.
 
 The callback accepts at most eight Copy commands from an eight-entry SPSC ring
 at a block boundary. A full queue refuses ordinary edits before UI state changes.
@@ -39,7 +55,7 @@ status use atomics. The applied sequence reports command consumption; individual
 fade completion can follow by up to a few blocks. JACK CPU load is queried and
 labelled as whole-server load off-thread; it is not a measurement of this
 callback's maximum cost. No callback timings or temperatures are claimed by
-this initial UI.
+the UI.
 
 A port audit every 250 ms checks exact counterpart names and connection counts.
 Notifications immediately invalidate the affected owned slot. An atomic graph
@@ -70,3 +86,94 @@ reject unknown/missing schema fields and unsupported versions, and validate the
 whole rack before publication. Load errors cannot partially update an engine.
 Writes use private temporary files, fsync and atomic rename. Directory fsync is
 best effort after commit; once rename succeeds the app reports committed state.
+
+Rack schema v3 stores eight complete effect configurations per engine, Single
+or MultiFX mode, and a bounded active MultiFX count of 2–8 (default four).
+Families keep independent delay/reverb/chorus/exciter settings. Typed v1 decoding
+accepts only original Delay/Room fields and migrates them into slot 1. Typed v2
+decoding requires exactly three old-style slots and a count of two or three;
+all old settings and 1/3 mixing gain survive. New slots are inactive on migration.
+The complete result is validated before publication. Reads never rewrite files.
+New saves use v3; physical/controller configuration uses separate v2
+schema with read-only migration of v1 explicit bindings. Unknown, missing,
+duplicate and unsupported fields remain invalid.
+
+`surface.rs` owns logical physical roles. Guided setup learns 16 rotations,
+8 pads and clicks 1/9. `Navigate` and `Value` are UI context roles;
+`Press(0)` confirms and `Press(8)` cancels. Rotaries 2–8 use fixed slot levels,
+10–16 resolve selected-effect parameters/BPM/return, and pads address their
+own slot bypass independently of selection. Empty targets resolve to None;
+no pad or unused rotary creates a slot. Legacy Knob/Button roles and explicit
+parameter/action mappings remain valid for existing private configurations.
+Legacy parameter pages affect those old bindings; the new sound roles have
+fixed positions and fit together on the dedicated effect screen.
+
+`Mapper` retains physical note/CC held state independently of target identity.
+Pickup is per binding: context changes reset only affected sound controls;
+publication compares old/new resolved targets and values, resetting only changed
+bindings except the binding delivering that successful edit. The UI resolves
+Value to the focused rack card's level or the effect screen's selected field.
+In menus it uses a normalized draft value and step with independent absolute
+pickup; navigation changes the visible target without editing it. Context
+identity prevents crossing from a stale prior position. Relative edits are
+bounded. Recalling a sound resets all pickup. Capture suppresses live parameter
+ownership while retaining releases; guided setup consumes sound rotations even
+after capture. Input loss/overflow drops backlog and requires releases; neither
+infers an audio stop. Mapping edits retain known held/released states. A
+prepared replacement MIDI subscription is committed only after private saving
+succeeds, retaining the old input on open/save failure. No MIDI output exists.
+
+`Main` is an eight-card rack browser (two columns, four rows, 20×2-cell cards).
+SelectSlot opens `Play`, the dedicated effect screen, without audio soloing.
+Its two rows of eight rotary tiles follow the physical top/bottom rows; only
+positions 1 and 9 show click brackets. The selected value, wet level, circular
+ASCII input/output LEDs, tempo/return and contextual controls retain context.
+Rack returns to the selected card. Home page/field/focus survive menu return;
+per-engine slot and legacy parameter-page state also remain intact. Normal
+screens reserve rows 11–12 and the shared row 13. Only actual meter/fault state
+is shown; bypass permits draining without claiming measured tail completion.
+
+Effects/slot/Timing form one detached engine draft. Routing and Tempo have
+separate entry baselines. Apply merges changed scalar fields into current state;
+Cancel keeps the live rack. Concurrent changes to the same field cause a visible
+conflict and retain the draft. Keep live rebases fields changed live while
+preserving other draft edits, followed by another explicit Apply. Engine changes
+and unrelated menu shortcuts cannot discard effect/tempo drafts. The performance
+MIDI context remains visible in the effect editor banner. A temporary visit to
+physical Ports suspends/restores the logical routing draft. Failed applies,
+loads and saves preserve active state and selection for retry.
+
+Private local schema v2 adds `Target::Surface(Role)` to the bounded binding list.
+The v1 decoder validates old explicit mappings and upgrades in memory; only an
+explicit Apply rewrites. Duplicate physical controls, duplicate surface roles,
+invalid indices and mismatched control kinds are rejected. Guided setup keeps
+26 inputs in a detached local draft. Only Press indices 0 and 8 are valid;
+no additional button bank is offered by the wizard. Adopting an existing
+explicit physical binding requires the visible Use role action; other explicit mappings survive.
+The surface adds no worker threads or callback commands.
+See the [interaction contract](INTERFACE.md) and
+[renderer evidence](screens/README.md).
+
+## Harmonic excitation
+
+`exciter.rs` is original DSP, with no borrowed plugin or sibling code. Two
+high-pass poles select the input region. Cascaded 2x polyphase half-band FIRs
+upsample to 4x around a smooth rational nonlinear residual, then decimate.
+The 17-tap FIRs use a normalized Hamming-windowed sinc, center coefficient 0.5
+and eight nonzero odd coefficients. A DC blocker and two tone low-pass poles
+shape the wet return. Each channel has independent history; there is no stereo
+crossfeed or linear dry branch. Warm/Bright are character choices, not models
+of named analog hardware. Drive zero produces exact silence after its ramp.
+
+Coefficient exponentials are evaluated at most once every 32 samples; bounded
+interpolation follows the slot's control ramp. All arrays are prepared inline,
+with bounded reset and processing work. FIR group delay is 11.25 base-rate
+samples, plus frequency-dependent phase from the tone/input/DC filters. This
+is separate from JACK/converter latency. The return may contain residual
+fundamental and intermodulation energy; external dry-plus-wet listening remains
+necessary. Oversampling addresses aliasing but does not guarantee its absence.
+The normal suite checks harmonic character, absence of a small-signal linear
+branch, and suppression of two selected folded harmonics versus direct shaping.
+The general aliasing/oversampling rationale is discussed in [Parker et al.,
+DAFx 2016](https://dafx.de/paper-archive/2016/dafxpapers/20-DAFx-16_paper_41-PN.pdf);
+this implementation uses FIR oversampling, not that paper's ADAA algorithm.

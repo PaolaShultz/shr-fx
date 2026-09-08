@@ -1,61 +1,50 @@
-# First usable version
+# Current handoff — 2026-09-08
 
-The supplied AGENTS.md is the product contract. This checkout initially
-contained only that brief; no application or user state existed.
+The local v0.3 implementation and documentation are complete for this session.
+The release executable starts offline; there is no unfinished UI/controller
+implementation item carried forward. Actual controller setup, touch usability,
+listening and JACK/thermal/latency acceptance need a separately authorized
+hardware session. They are validation still to perform, not measured results.
 
-1. Establish a standalone Rust 1.97.1 executable, private data root and Git.
-2. Implement strict rack/routing models and all input/output combinations,
-   including synthetic four-port operation. Keep physical identities separate.
-3. Build two independently owned wet engines: stereo delay and room reverb.
-   Preallocate both algorithms, smooth controls, bound feedback, fade structural
-   changes, drain bypass tails, and latch faults per engine. No dry branch.
-4. Attach only to an existing JACK server on explicit invocation. Own four
-   stable input/output slots, exact user-selected physical connections, bounded
-   control publication, atomic meters and fault status. Keep offline UI useful.
-5. Provide a 40×13 touch/keyboard/controller interface: both engines, parameters,
-   routing draft/apply/cancel, physical ports, tempo/tap/clock, save/load, learn,
-   mute, panic and Exit. Reserve the last three rows for controls and status.
-6. Store strict versioned snapshots by atomic replacement; failed recall keeps
-   active state. MIDI Sequencer is input-only and explicitly enabled. Provide
-   button edges, release handling, relative controls and absolute pickup.
-7. Run focused regressions while developing, then the complete normal suite,
-   formatting, Clippy, release build and a hardware-free terminal smoke test.
-   Document invocation, behavior, limitations and acceptance still required.
-8. Review staged files and commit the usable version locally. No remote publish.
+## Delivered behavior
 
-First-version palette deliberately stops at delay and room. Ping-pong is a
-bounded delay option. Larger spaces, chorus and combinations follow listening
-and measured dual-engine budgets. No claims of hardware emulation.
+- Two independent engines, each with up to eight prepared parallel wet slots:
+  Delay, Reverb, Chorus and Harmonic Exciter can share one vocal send and one
+  stereo return. All supported input/return combinations remain available.
+- Rack shows eight cards. Opening a card gives that effect its own screen;
+  Back returns to the same slot while the other effects keep sounding.
+- The corrected controller has eight pads/buttons total, sixteen rotations in
+  two rows of eight, and clicks on 1 and 9. Rotary 1 browses/opens; rotary 9
+  edits/goes Back. The other rotations control sound; pads toggle their own
+  slots without selecting or resizing. Guided setup learns 26 physical inputs.
+- Immediate smoothed performance edits, directional absolute pickup, supported
+  relative input, held/released control handling and recovery are implemented.
+  Touch, keyboard and MIDI reach the same actions without mandatory chords.
+- Structural drafts have Apply/Cancel, retained context and explicit same-field
+  live conflict recovery. Failed operations retain active state and editable
+  work. Routing/Ports round trips retain the logical routing draft.
+- Rack schema v3 and private local schema v2 have strict validation and read-only
+  migration. Explicit legacy mappings remain compatible; physical identities
+  stay outside sounds. No live audio, hardware MIDI or OS configuration changed.
 
-Validation includes impulses/distinguishable channels, routing cross-product,
-non-adjacent mono returns, A/B isolation, wet-only tails/mute, time changes,
-finite output, rate changes, missing buffers/ports, control overload, snapshot
-rejection and cancellation, callback allocation freedom, controller edges,
-clock loss, and 40×13 reachability. Long soaks/cost renders are opt-in.
+## Where to resume
 
-Live JACK/ALSA hardware testing, audible listening, recordings, latency/xrun/
-thermal measurements, services and installation are outside this local task's
-existing authorization. Software evidence does not substitute for them.
+| Need | Owning document |
+|---|---|
+| Build, run offline, operate and stop | [README](../README.md) |
+| Complete map, setup, value ranges, menu/draft/recovery behavior | [Interaction contract](INTERFACE.md) |
+| DSP/control ownership, bounds and persistence schemas | [Architecture](ARCHITECTURE.md) |
+| Checks passed, cost evidence and remaining hardware acceptance | [Acceptance](ACCEPTANCE.md) |
+| Native renderer output and regeneration command | [Screen gallery](screens/README.md) |
+| Earlier milestones and superseded limits/workflows | [History](HISTORY.md) |
 
-Fructal mode: Implement. Actors: musician, launcher, audio callback, JACK graph
-owner and controller. Necessary constraints come from AGENTS.md: wet-only
-returns, explicit ownership, bounded callback work and keyboardless operation.
-The design keeps unavailable ports visible, rejects invalid drafts before
-publication, keeps selection on failure, and puts Cancel/Retry beside editing.
-The initial state has no prior interaction to preserve. Normal/recovery tests
-will supply observed software evidence; physical usability remains unmeasured.
+The final normal suite, formatting, Clippy, release build and offline PTY smokes
+passed; dated counts and commands are recorded only in Acceptance. The gallery
+comes from the renderer and installed font, not a hand-maintained mockup.
+Historical DSP cost evidence remains available; UI/doc work does not require
+rerunning that opt-in matrix.
 
-## Delivered first version
-
-Steps 1–7 are implemented and verified; the deliverable is a local `main` commit
-containing the application, locked dependencies, this plan, user instructions
-and acceptance evidence. The release executable starts offline by default.
-The normal suite has 46 passing tests. The new offline cost simulator was
-validated once and remains opt-in. Live acceptance and expansion of the sound
-palette remain the explicitly separated next stage in `docs/ACCEPTANCE.md`.
-
-## Project naming
-
-The project, Cargo package, executable and local repository directory are
-`shr-fx`. The launcher gadget ID remains `fx`; existing JACK/ALSA names and
-private data locations continue to use that ID.
+For the next session, follow the hardware acceptance sequence in Acceptance:
+learn the actual controller's messages/encoding, verify touch and controller
+operation, then measure/listen with the existing audio setup if authorized.
+Do not restart the completed UI redesign from the archived plan.

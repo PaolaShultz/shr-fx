@@ -2,7 +2,7 @@ use std::process::Command;
 #[test]
 fn help_and_version_need_neither_terminal_nor_audio() {
     let exe = env!("CARGO_BIN_EXE_shr-fx");
-    for (arg, expected) in [("--help", "--data-root"), ("--version", "shr-fx 0.1.0")] {
+    for (arg, expected) in [("--help", "--data-root"), ("--version", "shr-fx 0.3.0")] {
         let output = Command::new(exe).arg(arg).output().unwrap();
         assert!(output.status.success());
         assert!(String::from_utf8_lossy(&output.stdout).contains(expected));

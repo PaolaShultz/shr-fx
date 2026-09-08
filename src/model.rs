@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 pub const PORTS: usize = 4;
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 3;
+pub const LOCAL_VERSION: u32 = 2;
+pub const MAX_STAGES: usize = 8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
@@ -230,19 +232,77 @@ pub fn engine_name(e: usize) -> &'static str {
     if e == 0 { "A" } else { "B" }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Algorithm {
+    #[default]
     Delay,
     Room,
+    Chorus,
+    Exciter,
 }
 impl Algorithm {
+    pub const ALL: [Self; 4] = [Self::Delay, Self::Room, Self::Chorus, Self::Exciter];
     pub fn label(self) -> &'static str {
         match self {
             Self::Delay => "Delay",
-            Self::Room => "Room",
+            Self::Room => "Reverb",
+            Self::Chorus => "Chorus",
+            Self::Exciter => "Exciter",
         }
     }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DelayKind {
+    Digital,
+    Tape,
+    MultiTap,
+    Diffused,
+}
+impl DelayKind {
+    pub const ALL: [Self; 4] = [Self::Digital, Self::Tape, Self::MultiTap, Self::Diffused];
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Digital => "Digital",
+            Self::Tape => "Tape echo",
+            Self::MultiTap => "Multi-tap",
+            Self::Diffused => "Diffused",
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReverbKind {
+    Room,
+    SmallRoom,
+    Chamber,
+    Plate,
+    Hall,
+}
+impl ReverbKind {
+    pub const ALL: [Self; 5] = [
+        Self::Room,
+        Self::SmallRoom,
+        Self::Chamber,
+        Self::Plate,
+        Self::Hall,
+    ];
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Room => "Room",
+            Self::SmallRoom => "Small room",
+            Self::Chamber => "Chamber",
+            Self::Plate => "Plate",
+            Self::Hall => "Hall",
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EngineMode {
+    Single,
+    MultiFx,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -258,16 +318,190 @@ pub struct Tempo {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct EngineConfig {
-    pub algorithm: Algorithm,
+pub struct DelayConfig {
+    pub kind: DelayKind,
     pub time_ms: f32,
-    pub predelay_ms: f32,
     pub feedback: f32,
     pub damping: f32,
-    pub level: f32,
     pub sync: bool,
     pub division: u8,
     pub ping_pong: bool,
+}
+impl Default for DelayConfig {
+    fn default() -> Self {
+        Self {
+            kind: DelayKind::Digital,
+            time_ms: 375.0,
+            feedback: 0.45,
+            damping: 0.5,
+            sync: false,
+            division: 2,
+            ping_pong: false,
+        }
+    }
+}
+impl DelayConfig {
+    pub const DIVISIONS: [f32; 5] = [0.25, 0.5, 1.0, 1.5, 2.0];
+    pub const DIVISION_LABELS: [&'static str; 5] = ["1/16", "1/8", "1/4", "1/4 dot", "1/2"];
+    pub fn milliseconds(self, tempo: Tempo) -> f32 {
+        if self.sync {
+            (60_000.0 / tempo.bpm * Self::DIVISIONS[self.division as usize]).clamp(1.0, 2000.0)
+        } else {
+            self.time_ms
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReverbConfig {
+    pub kind: ReverbKind,
+    pub predelay_ms: f32,
+    pub decay: f32,
+    pub damping: f32,
+}
+impl Default for ReverbConfig {
+    fn default() -> Self {
+        Self {
+            kind: ReverbKind::Room,
+            predelay_ms: 0.0,
+            decay: 0.45,
+            damping: 0.5,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChorusConfig {
+    pub rate_hz: f32,
+    pub depth_ms: f32,
+    pub base_ms: f32,
+    pub ensemble: bool,
+}
+impl Default for ChorusConfig {
+    fn default() -> Self {
+        Self {
+            rate_hz: 0.7,
+            depth_ms: 3.0,
+            base_ms: 15.0,
+            ensemble: false,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExciterConfig {
+    pub tune_hz: f32,
+    pub drive: f32,
+    pub tone: f32,
+    pub bright: bool,
+}
+impl Default for ExciterConfig {
+    fn default() -> Self {
+        Self {
+            tune_hz: 2500.0,
+            drive: 0.3,
+            tone: 0.6,
+            bright: false,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EffectConfig {
+    pub level: f32,
+    pub bypass: bool,
+    pub algorithm: Algorithm,
+    pub delay: DelayConfig,
+    pub reverb: ReverbConfig,
+    pub chorus: ChorusConfig,
+    pub exciter: ExciterConfig,
+}
+impl Default for EffectConfig {
+    fn default() -> Self {
+        Self {
+            level: 1.0,
+            bypass: false,
+            algorithm: Algorithm::Delay,
+            delay: DelayConfig::default(),
+            reverb: ReverbConfig::default(),
+            chorus: ChorusConfig::default(),
+            exciter: ExciterConfig::default(),
+        }
+    }
+}
+impl EffectConfig {
+    pub fn label(self) -> &'static str {
+        match self.algorithm {
+            Algorithm::Delay => self.delay.kind.label(),
+            Algorithm::Room => self.reverb.kind.label(),
+            Algorithm::Chorus => {
+                if self.chorus.ensemble {
+                    "Ensemble"
+                } else {
+                    "Chorus"
+                }
+            }
+            Algorithm::Exciter => {
+                if self.exciter.bright {
+                    "Bright exciter"
+                } else {
+                    "Warm exciter"
+                }
+            }
+        }
+    }
+    pub fn validate(self) -> Result<(), String> {
+        for (label, value, min, max) in [
+            ("Slot level", self.level, 0.0, 1.0),
+            ("Time", self.delay.time_ms, 1.0, 2000.0),
+            ("Feedback", self.delay.feedback, 0.0, 0.9),
+            ("Delay damping", self.delay.damping, 0.0, 0.95),
+            ("Predelay", self.reverb.predelay_ms, 0.0, 200.0),
+            ("Decay", self.reverb.decay, 0.0, 0.9),
+            ("Reverb damping", self.reverb.damping, 0.0, 0.95),
+            ("Chorus rate", self.chorus.rate_hz, 0.05, 5.0),
+            ("Chorus depth", self.chorus.depth_ms, 0.0, 8.0),
+            ("Chorus base", self.chorus.base_ms, 10.0, 30.0),
+            ("Exciter tune", self.exciter.tune_hz, 600.0, 6000.0),
+            ("Exciter drive", self.exciter.drive, 0.0, 1.0),
+            ("Exciter tone", self.exciter.tone, 0.0, 1.0),
+        ] {
+            bounded(label, value, min, max)?;
+        }
+        if self.delay.division > 4 {
+            return Err("Unknown tempo division".into());
+        }
+        Ok(())
+    }
+    /// Only audible structural choices trigger a fade/clear. Inactive family
+    /// settings may be edited or recalled without retiring the current tail.
+    pub fn same_structure(self, other: Self) -> bool {
+        self.algorithm == other.algorithm
+            && match self.algorithm {
+                Algorithm::Delay => {
+                    self.delay.kind == other.delay.kind
+                        && self.delay.ping_pong == other.delay.ping_pong
+                }
+                Algorithm::Room => self.reverb.kind == other.reverb.kind,
+                Algorithm::Chorus => self.chorus.ensemble == other.chorus.ensemble,
+                Algorithm::Exciter => self.exciter.bright == other.exciter.bright,
+            }
+    }
+}
+fn bounded(label: &str, value: f32, min: f32, max: f32) -> Result<(), String> {
+    if !value.is_finite() || !(min..=max).contains(&value) {
+        Err(format!("{label} outside {min}..{max}"))
+    } else {
+        Ok(())
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EngineConfig {
+    pub mode: EngineMode,
+    pub pieces: u8,
+    pub stages: [EffectConfig; MAX_STAGES],
+    pub level: f32,
     pub bypass: bool,
     pub mute: bool,
     pub tempo: Tempo,
@@ -275,15 +509,13 @@ pub struct EngineConfig {
 impl Default for EngineConfig {
     fn default() -> Self {
         Self {
-            algorithm: Algorithm::Delay,
-            time_ms: 375.0,
-            predelay_ms: 0.0,
-            feedback: 0.45,
-            damping: 0.5,
+            mode: EngineMode::Single,
+            pieces: 4,
+            stages: std::array::from_fn(|i| EffectConfig {
+                algorithm: Algorithm::ALL[i % Algorithm::ALL.len()],
+                ..EffectConfig::default()
+            }),
             level: 0.7,
-            sync: false,
-            division: 2,
-            ping_pong: false,
             bypass: false,
             mute: false,
             tempo: Tempo {
@@ -294,32 +526,54 @@ impl Default for EngineConfig {
     }
 }
 impl EngineConfig {
-    pub const DIVISIONS: [f32; 5] = [0.25, 0.5, 1.0, 1.5, 2.0];
-    pub const DIVISION_LABELS: [&'static str; 5] = ["1/16", "1/8", "1/4", "1/4 dot", "1/2"];
-    pub fn delay_ms(self) -> f32 {
-        if self.sync {
-            (60_000.0 / self.tempo.bpm * Self::DIVISIONS[self.division as usize]).clamp(1.0, 2000.0)
+    /// Preserve v2 two/three-slot gain. Larger mixes reserve equal headroom
+    /// per configured slot, independently of bypass or current wet levels.
+    pub fn mix_divisor(self) -> usize {
+        if self.mode == EngineMode::Single {
+            1
         } else {
-            self.time_ms
+            self.stage_count().max(3)
         }
     }
+    pub fn stage_count(self) -> usize {
+        if self.mode == EngineMode::MultiFx {
+            self.pieces as usize
+        } else {
+            1
+        }
+    }
+    pub fn label(self) -> &'static str {
+        if self.mode == EngineMode::MultiFx {
+            "MultiFX"
+        } else {
+            self.stages[0].label()
+        }
+    }
+    pub fn path_label(self) -> String {
+        if self.mode == EngineMode::Single {
+            self.stages[0].label().into()
+        } else {
+            self.stages[..self.stage_count()]
+                .iter()
+                .map(|s| s.label())
+                .collect::<Vec<_>>()
+                .join(" + ")
+        }
+    }
+    pub fn same_structure(self, other: Self) -> bool {
+        self.mode == other.mode
+            && self.stage_count() == other.stage_count()
+            && (0..self.stage_count()).all(|i| self.stages[i].same_structure(other.stages[i]))
+    }
     pub fn validate(self) -> Result<(), String> {
-        for (label, value, min, max) in [
-            ("Time", self.time_ms, 1.0, 2000.0),
-            ("Predelay", self.predelay_ms, 0.0, 200.0),
-            ("Feedback", self.feedback, 0.0, 0.9),
-            ("Damping", self.damping, 0.0, 0.95),
-            ("Level", self.level, 0.0, 1.0),
-            ("BPM", self.tempo.bpm, 30.0, 300.0),
-        ] {
-            if !value.is_finite() || !(min..=max).contains(&value) {
-                return Err(format!("{label} outside {min}..{max}"));
-            }
+        if !(2..=MAX_STAGES as u8).contains(&self.pieces) {
+            return Err(format!("MultiFX needs 2–{MAX_STAGES} slots"));
         }
-        if self.division > 4 {
-            return Err("Unknown tempo division".into());
+        for stage in self.stages {
+            stage.validate()?;
         }
-        Ok(())
+        bounded("Level", self.level, 0.0, 1.0)?;
+        bounded("BPM", self.tempo.bpm, 30.0, 300.0)
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -332,15 +586,11 @@ pub struct Rack {
 }
 impl Default for Rack {
     fn default() -> Self {
+        let mut engines = [EngineConfig::default(); 2];
+        engines[1].stages[0].algorithm = Algorithm::Room;
         Self {
             version: VERSION,
-            engines: [
-                EngineConfig::default(),
-                EngineConfig {
-                    algorithm: Algorithm::Room,
-                    ..EngineConfig::default()
-                },
-            ],
+            engines,
             routing: Routing::default(),
             shared_tempo: true,
         }

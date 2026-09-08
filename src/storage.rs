@@ -1,6 +1,9 @@
 use crate::{
     midi::{Binding, MidiSource},
-    model::{Availability, Rack, VERSION},
+    model::{
+        Algorithm, Availability, ChorusConfig, DelayConfig, EffectConfig, EngineConfig, EngineMode,
+        LOCAL_VERSION, Rack, ReverbConfig, Routing, Tempo, VERSION,
+    },
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
@@ -64,7 +67,7 @@ pub struct LocalConfig {
 impl Default for LocalConfig {
     fn default() -> Self {
         Self {
-            version: VERSION,
+            version: LOCAL_VERSION,
             ports: Ports::default(),
             midi_source: None,
             bindings: Vec::new(),
@@ -73,7 +76,7 @@ impl Default for LocalConfig {
 }
 impl LocalConfig {
     pub fn validate(&self) -> Result<(), String> {
-        if self.version != VERSION {
+        if self.version != LOCAL_VERSION {
             return Err("Unsupported local config version".into());
         }
         self.ports.validate()?;
@@ -82,6 +85,13 @@ impl LocalConfig {
         }
         for (i, binding) in self.bindings.iter().enumerate() {
             binding.validate()?;
+            if matches!(binding.target, crate::midi::Target::Surface(_))
+                && self.bindings[..i]
+                    .iter()
+                    .any(|b| b.target == binding.target)
+            {
+                return Err("Surface role has duplicate bindings".into());
+            }
             if self.bindings[..i].iter().any(|b| {
                 b.channel == binding.channel
                     && b.number == binding.number
@@ -154,7 +164,17 @@ pub fn load_local(root: &Path) -> Result<LocalConfig, String> {
     if !path.exists() {
         return Ok(LocalConfig::default());
     }
-    let config: LocalConfig = read_json(&path)?;
+    let mut config: LocalConfig = read_json(&path)?;
+    if config.version == 1 {
+        if config
+            .bindings
+            .iter()
+            .any(|b| matches!(b.target, crate::midi::Target::Surface(_)))
+        {
+            return Err("Surface roles require local config v2".into());
+        }
+        config.version = LOCAL_VERSION;
+    }
     config.validate()?;
     Ok(config)
 }
@@ -175,7 +195,173 @@ pub fn save_rack(root: &Path, slot: usize, rack: &Rack) -> Result<(), String> {
     atomic_json(&snapshot_path(root, slot)?, rack)
 }
 pub fn load_rack(root: &Path, slot: usize, available: Availability) -> Result<Rack, String> {
-    let rack: Rack = read_json(&snapshot_path(root, slot)?)?;
+    let stored: StoredRack = read_json(&snapshot_path(root, slot)?)?;
+    let rack = match stored {
+        StoredRack::Current(rack) => *rack,
+        StoredRack::V2(rack) => rack.upgrade()?,
+        StoredRack::Legacy(rack) => rack.upgrade()?,
+    };
     rack.validate(available)?;
     Ok(rack)
+}
+
+// Typed decoding keeps unknown/missing/duplicate fields invalid in both schemas.
+// Migration is read-only; only an explicit Save writes the current format.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum StoredRack {
+    Current(Box<Rack>),
+    V2(Box<V2Rack>),
+    Legacy(LegacyRack),
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct V2Rack {
+    version: u32,
+    engines: [V2Engine; 2],
+    routing: Routing,
+    shared_tempo: bool,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct V2Engine {
+    mode: EngineMode,
+    pieces: u8,
+    stages: [V2Effect; 3],
+    level: f32,
+    bypass: bool,
+    mute: bool,
+    tempo: Tempo,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum V2Algorithm {
+    Delay,
+    Room,
+    Chorus,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct V2Effect {
+    level: f32,
+    bypass: bool,
+    algorithm: V2Algorithm,
+    delay: DelayConfig,
+    reverb: ReverbConfig,
+    chorus: ChorusConfig,
+}
+impl V2Rack {
+    fn upgrade(self) -> Result<Rack, String> {
+        if self.version != 2 || self.engines.iter().any(|e| !(2..=3).contains(&e.pieces)) {
+            return Err("Invalid v2 rack version or slot count".into());
+        }
+        let engines = self.engines.map(|old| {
+            let mut engine = EngineConfig {
+                mode: old.mode,
+                pieces: old.pieces,
+                level: old.level,
+                bypass: old.bypass,
+                mute: old.mute,
+                tempo: old.tempo,
+                ..EngineConfig::default()
+            };
+            for (i, effect) in old.stages.into_iter().enumerate() {
+                engine.stages[i] = EffectConfig {
+                    algorithm: match effect.algorithm {
+                        V2Algorithm::Delay => Algorithm::Delay,
+                        V2Algorithm::Room => Algorithm::Room,
+                        V2Algorithm::Chorus => Algorithm::Chorus,
+                    },
+                    level: effect.level,
+                    bypass: effect.bypass,
+                    delay: effect.delay,
+                    reverb: effect.reverb,
+                    chorus: effect.chorus,
+                    ..EffectConfig::default()
+                };
+            }
+            engine
+        });
+        Ok(Rack {
+            version: VERSION,
+            engines,
+            routing: self.routing,
+            shared_tempo: self.shared_tempo,
+        })
+    }
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyRack {
+    version: u32,
+    engines: [LegacyEngine; 2],
+    routing: Routing,
+    shared_tempo: bool,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum LegacyAlgorithm {
+    Delay,
+    Room,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyEngine {
+    algorithm: LegacyAlgorithm,
+    time_ms: f32,
+    predelay_ms: f32,
+    feedback: f32,
+    damping: f32,
+    level: f32,
+    sync: bool,
+    division: u8,
+    ping_pong: bool,
+    bypass: bool,
+    mute: bool,
+    tempo: Tempo,
+}
+impl LegacyRack {
+    fn upgrade(self) -> Result<Rack, String> {
+        if self.version != 1 {
+            return Err("Unsupported rack version".into());
+        }
+        let engines = self.engines.map(|old| {
+            let mut engine = EngineConfig {
+                level: old.level,
+                bypass: old.bypass,
+                mute: old.mute,
+                tempo: old.tempo,
+                ..EngineConfig::default()
+            };
+            engine.stages[0] = EffectConfig {
+                algorithm: match old.algorithm {
+                    LegacyAlgorithm::Delay => Algorithm::Delay,
+                    LegacyAlgorithm::Room => Algorithm::Room,
+                },
+                delay: DelayConfig {
+                    time_ms: old.time_ms,
+                    feedback: old.feedback,
+                    damping: old.damping,
+                    sync: old.sync,
+                    division: old.division,
+                    ping_pong: old.ping_pong,
+                    ..DelayConfig::default()
+                },
+                reverb: ReverbConfig {
+                    predelay_ms: old.predelay_ms,
+                    decay: old.feedback,
+                    damping: old.damping,
+                    ..ReverbConfig::default()
+                },
+                ..EffectConfig::default()
+            };
+            engine
+        });
+        Ok(Rack {
+            version: VERSION,
+            engines,
+            routing: self.routing,
+            shared_tempo: self.shared_tempo,
+        })
+    }
 }

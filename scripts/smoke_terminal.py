@@ -34,10 +34,31 @@ def run_case(method):
             assert child.poll() is None, capture.decode(errors="replace")
             assert termios.tcgetattr(slave)[3] & termios.ICANON == 0
             if method == "touch":
-                # Engine B, feedback draft, +, Cancel, then visible Exit.
-                for data in [b"\x1b[<0;3;4M", b"\x1b[<0;4;8M", b"\x1b[<0;15;11M", b"\x1b[<0;35;11M", b"\x1b[<0;35;1M"]:
-                    os.write(master, data)
+                # Engine B, live decay +, Menu, Back, visible Exit.
+                for x, y in [(15, 11), (3, 3), (12, 8), (15, 11), (25, 12), (35, 12), (35, 1)]:
+                    os.write(master, f"\x1b[<0;{x};{y}M".encode())
                     collect(0.05)
+            elif method == "multifx":
+                # More, Effects, MultiFX, slot 3, Ensemble, Apply, Exit.
+                for x, y in [(35, 11), (3, 3), (3, 4), (15, 11), (3, 8), (3, 5), (15, 11), (25, 11), (35, 1)]:
+                    os.write(master, f"\x1b[<0;{x};{y}M".encode())
+                    collect(0.05)
+                assert b"MultiFX" in capture, capture.decode(errors="replace")
+                assert b"Ensemble" in capture, capture.decode(errors="replace")
+            elif method == "exciter":
+                # More, Effects, MultiFX, second page, slot 4, Bright, Apply.
+                for x, y in [(35, 11), (3, 3), (3, 4), (15, 11), (3, 9),
+                             (3, 6), (3, 5), (15, 11), (25, 11), (35, 1)]:
+                    os.write(master, f"\x1b[<0;{x};{y}M".encode())
+                    collect(0.05)
+                assert b"Exciter" in capture, capture.decode(errors="replace")
+                assert b"Bright" in capture, capture.decode(errors="replace")
+            elif method == "controller":
+                # Empty slot 8, Back, Menu, guided setup, next role, Cancel, Exit.
+                for x, y in [(23, 9), (3, 12), (35, 11), (3, 6), (15, 12), (35, 12), (35, 1)]:
+                    os.write(master, f"\x1b[<0;{x};{y}M".encode())
+                    collect(0.05)
+                assert b"CONTROLLER" in capture, capture.decode(errors="replace")
             elif method == "keyboard":
                 os.write(master, b"r")
                 collect(0.05)
@@ -62,5 +83,5 @@ def run_case(method):
     os.close(slave)
 
 
-for case in ["touch", "keyboard", "SIGTERM"]:
+for case in ["touch", "multifx", "exciter", "controller", "keyboard", "SIGTERM"]:
     run_case(case)

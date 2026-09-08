@@ -6,12 +6,14 @@ fn rack() -> Rack {
     let mut r = Rack::default();
     for engine in &mut r.engines {
         *engine = EngineConfig {
-            time_ms: 10.0,
-            feedback: 0.0,
-            damping: 0.0,
             level: 1.0,
             ..EngineConfig::default()
         };
+        engine.stages[0].delay.time_ms = 10.0;
+        engine.stages[0].delay.feedback = 0.0;
+        engine.stages[0].delay.damping = 0.0;
+        engine.stages[0].reverb.decay = 0.0;
+        engine.stages[0].reverb.damping = 0.0;
     }
     r
 }
@@ -58,7 +60,7 @@ fn delay_impulse_has_no_dry_branch_at_every_supported_rate() {
 #[test]
 fn room_is_wet_and_deterministic_and_has_a_decaying_tail() {
     let mut r = rack();
-    r.engines[0].algorithm = Algorithm::Room;
+    r.engines[0].stages[0].algorithm = Algorithm::Room;
     let mut a = Processor::new(8000, r).unwrap();
     let mut b = Processor::new(8000, r).unwrap();
     warm(&mut a);
@@ -75,7 +77,7 @@ fn room_is_wet_and_deterministic_and_has_a_decaying_tail() {
 #[test]
 fn bypass_drains_then_silences_and_mute_clears_without_dry() {
     let mut r = rack();
-    r.engines[0].time_ms = 100.0;
+    r.engines[0].stages[0].delay.time_ms = 100.0;
     let mut p = Processor::new(8000, r).unwrap();
     warm(&mut p);
     block(&mut p, &[[1.0, 0.0, 0.0, 0.0]], Availability::ALL);
@@ -98,7 +100,7 @@ fn bypass_drains_then_silences_and_mute_clears_without_dry() {
 #[test]
 fn independent_algorithm_edits_preserve_other_engine_exactly() {
     let mut r = rack();
-    r.engines[1].feedback = 0.8;
+    r.engines[1].stages[0].delay.feedback = 0.8;
     let mut a = Processor::new(8000, r).unwrap();
     let mut b = Processor::new(8000, r).unwrap();
     warm(&mut a);
@@ -106,7 +108,7 @@ fn independent_algorithm_edits_preserve_other_engine_exactly() {
     let input = [[0.2, 0.3, 0.0, 0.0]; 512];
     block(&mut a, &input, Availability::ALL);
     block(&mut b, &input, Availability::ALL);
-    r.engines[0].algorithm = Algorithm::Room;
+    r.engines[0].stages[0].algorithm = Algorithm::Room;
     a.apply(r);
     for _ in 0..10 {
         let (a, _) = block(&mut a, &input, Availability::ALL);
@@ -193,7 +195,7 @@ fn delay_time_changes_crossfade_without_buffer_jumps() {
     let mut max_jump = 0.0f32;
     for chunk in 0..80 {
         if chunk == 30 {
-            r.engines[0].time_ms = 73.0;
+            r.engines[0].stages[0].delay.time_ms = 73.0;
             p.apply(r);
         }
         let input = (0..128)
@@ -221,13 +223,13 @@ fn demanding_feedback_and_rapid_controls_remain_finite() {
     let mut r = rack();
     let mut p = Processor::new(8000, r).unwrap();
     for i in 0..100 {
-        r.engines[0].feedback = 0.9;
-        r.engines[1].algorithm = if i % 10 < 5 {
+        r.engines[0].stages[0].delay.feedback = 0.9;
+        r.engines[1].stages[0].algorithm = if i % 10 < 5 {
             Algorithm::Room
         } else {
             Algorithm::Delay
         };
-        r.engines[0].time_ms = 1.0 + (i * 17 % 1999) as f32;
+        r.engines[0].stages[0].delay.time_ms = 1.0 + (i * 17 % 1999) as f32;
         p.apply(r);
         let (out, _) = block(&mut p, &[[0.8, -0.8, 0.0, 0.0]; 256], Availability::ALL);
         assert!(
@@ -241,8 +243,8 @@ fn demanding_feedback_and_rapid_controls_remain_finite() {
 #[test]
 fn mono_ping_pong_alternates_between_stereo_returns() {
     let mut r = rack();
-    r.engines[0].ping_pong = true;
-    r.engines[0].feedback = 0.5;
+    r.engines[0].stages[0].delay.ping_pong = true;
+    r.engines[0].stages[0].delay.feedback = 0.5;
     r.routing.layout = Layout::AStereo;
     r.routing.outputs[0] = [0, 1];
     let mut p = Processor::new(8000, r).unwrap();
@@ -273,8 +275,8 @@ fn return_reassignment_fades_then_places_only_on_new_owned_slots() {
 #[test]
 fn room_stereo_input_does_not_leak_into_unexcited_channel_or_engine() {
     let mut r = rack();
-    r.engines[0].algorithm = Algorithm::Room;
-    r.engines[1].algorithm = Algorithm::Room;
+    r.engines[0].stages[0].algorithm = Algorithm::Room;
+    r.engines[1].stages[0].algorithm = Algorithm::Room;
     r.routing.layout = Layout::DualStereo;
     r.routing.inputs = [Source::Stereo([0, 1]), Source::Stereo([2, 3])];
     r.routing.outputs = [[0, 1], [2, 3]];

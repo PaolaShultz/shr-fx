@@ -45,7 +45,9 @@ two-output card or infer routes from enumeration order.
 
 A finite routing matrix is enough; do not turn this into an arbitrary patchbay.
 No A/B feedback loop or recursive engine routing. Combinations inside an engine
-use bounded, prepared serial/parallel effect topologies with explicit wet paths.
+use bounded, prepared parallel-only effect slots with explicit wet paths.
+The owner superseded the earlier three-slot limit: support up to eight slots
+per engine, including reverb + delay + chorus + harmonic exciter together.
 
 ## Sound palette and cost discipline
 
@@ -61,10 +63,10 @@ listening and measured dual-engine headroom:
   economical wow/flutter. No claim of exact hardware emulation.
 - Chorus and other inexpensive modulated wet-delay textures; evaluate phaser,
   flanger, diffusion, and spatial movement when they add a useful return.
-- Combinations such as echo into chamber, chorus into plate, diffused delay,
-  and tape echo with a short ambience. Keep a small fixed maximum stage count
-  and explicit CPU/memory budgets rather than unlimited stacking.
-- Parallel colour/saturator returns are allowed. Their delay relative to dry
+- Parallel combinations such as reverb + delay + chorus + exciter on one send,
+  multiple delays or layered reverbs. Keep the eight-slot per-engine bound and
+  explicit CPU/memory budgets. No serial routing between slots for now.
+- Parallel harmonic exciter/colour/saturator returns are allowed. Their delay relative to dry
   can change phase and comb filtering, so judge the combined mixer result;
   do not pretend every parallel effect is insensitive to latency.
 
@@ -105,11 +107,27 @@ return. Chorus/flanger especially need listening in the external dry+wet mix.
 
 ## UI, persistence, and failure behavior
 
-One overview shows both engines, input/return mode, input/output meters,
-algorithm, tempo source/value, and the selected engine's key controls. Engine
-selection, tap, wet bypass, mute, routing, sound recall/save, and Exit must all
-be reachable at 40×13 by touch and MIDI. Keep faults useful and controls
-consistent across algorithms without giving every parameter a hidden mode.
+The performance workflow is Rack → open an effect → adjust → Back. Rack shows
+all eight slot states/levels for the selected engine; opening an effect gives
+it a dedicated screen without audio soloing. Keep A/B identity and switching
+visible, and retain the selected slot, value and focus on menu return. The
+effect screen shows input/output circular LED meters, tempo/source and return.
+Normal screens retain rows 11–12 for actions and row 13 for shared status/faults.
+
+The owner's corrected hardware has **eight pads/buttons total**, sixteen
+rotaries in two rows of eight (1–8 top, 9–16 bottom), and clicks only on 1 and 9.
+Do not restore an extra eight-button bank or assume other push switches. The
+current map in `docs/INTERFACE.md` uses 1 for browse/open and 9 for value/back;
+setup learns 26 physical inputs. Pads toggle their own wet bypass without
+selecting or opening a slot. Empty slots stay empty until explicitly configured.
+Keep existing explicit/legacy mappings compatible. Model, CC/note identities,
+encoder encoding, motorization and controllable LEDs must not be invented.
+
+Engine selection, TAP, wet bypass, Mute/Resume, routing, sound recall/save,
+controller setup, PANIC and Exit must remain reachable by touch and configured
+MIDI at 40×13. Keep performance edits immediate and smoothed, structural edits
+cancellable, live/draft conflicts explicit, and fault feedback above routine
+status. Treat bypass as excitation off/tail allowed, never measured tail state.
 
 Store strict versioned rack snapshots with A/B algorithms, parameters, tempo
 policy, and logical routing; keep physical device assignments in private local
@@ -217,3 +235,22 @@ shutdown behavior. Do not require a launcher SDK, daemon, network API, or a
 shared crate. The launcher owns launching/waiting; the gadget owns its audio,
 state, safe stopping, and terminal restoration. Restore raw mode, cursor,
 mouse reporting, and the alternate screen on normal exit and handled errors.
+
+## Documentation maintenance
+
+- Keep `README.md` as the run/operate entry point, `docs/INTERFACE.md` as the
+  interaction/controller contract, and `docs/ARCHITECTURE.md` as the owning
+  implementation/schema contract. Update the relevant document in the same
+  change as behavior, hardware assumptions, persistence or command changes.
+- Keep `docs/PLAN.md` a current handoff with completed scope and concrete next
+  work. Move superseded plans/limits to `docs/HISTORY.md`; do not leave old
+  instructions alongside the current workflow as if both were requirements.
+- Record dated check results and hardware limits in `docs/ACCEPTANCE.md`.
+  Keep test counts there instead of copying them into multiple current docs.
+  Historical results are evidence for their recorded milestone, not fresh runs.
+- Generate `docs/screens/` from `examples/screen_gallery.rs` through
+  `python3 scripts/screen_gallery.py` after visible renderer changes. Never
+  hand-edit generated previews to hide a mismatch. Keep the installed font and
+  palette read-only. Check local Markdown links and `git diff --check` before
+  committing documentation. A documentation-only pass needs those checks;
+  select further tests from actual code changes and the test policy above.

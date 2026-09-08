@@ -1,6 +1,6 @@
 use shr_fx::{
     audio::{CallbackCore, Command, Shared},
-    model::{Algorithm, Availability, Rack},
+    model::{Algorithm, Availability, DelayKind, EngineMode, Rack, ReverbKind},
 };
 use std::{
     alloc::{GlobalAlloc, Layout, System},
@@ -54,7 +54,16 @@ fn tracked(f: impl FnOnce()) {
 #[test]
 fn complete_callback_is_allocation_free_through_edits_faults_and_panic() {
     let mut rack = Rack::default();
-    rack.engines[0].time_ms = 1.0;
+    for engine in &mut rack.engines {
+        engine.mode = EngineMode::MultiFx;
+        engine.pieces = shr_fx::model::MAX_STAGES as u8;
+        for slot in &mut engine.stages {
+            slot.delay.feedback = 0.9;
+            slot.reverb.decay = 0.9;
+            slot.chorus.ensemble = true;
+        }
+    }
+    rack.engines[0].stages[0].delay.time_ms = 1.0;
     let (mut sender, receiver) = rtrb::RingBuffer::new(8);
     let shared = Arc::new(Shared::new(48000));
     shared.publish_availability(shared.audit_generation(), Availability::ALL);
@@ -62,12 +71,21 @@ fn complete_callback_is_allocation_free_through_edits_faults_and_panic() {
     let mut input = [[0.2; 256]; 4];
     let mut output = [[0.0; 256]; 4];
     for i in 0..100 {
-        rack.engines[0].time_ms = (i * 17 + 1) as f32;
-        rack.engines[1].algorithm = if i % 9 < 4 {
-            Algorithm::Room
-        } else {
-            Algorithm::Delay
-        };
+        for (e, engine) in rack.engines.iter_mut().enumerate() {
+            for (slot, effect) in engine.stages.iter_mut().enumerate() {
+                effect.algorithm =
+                    Algorithm::ALL[((i / 5) as usize + slot + e) % Algorithm::ALL.len()];
+                effect.delay.time_ms = (i * 17 + 1) as f32;
+                effect.delay.kind = DelayKind::ALL[(i / 5) as usize % 4];
+                effect.reverb.kind = ReverbKind::ALL[(i / 5) as usize % 5];
+                effect.chorus.depth_ms = (i % 9) as f32;
+                effect.exciter.drive = (i % 11) as f32 / 10.0;
+                effect.exciter.tune_hz = 600.0 + (i % 55) as f32 * 100.0;
+                effect.exciter.tone = (i % 11) as f32 / 10.0;
+                effect.level = (i % 11) as f32 / 10.0;
+                effect.bypass = i % 17 == 0;
+            }
+        }
         sender.push(Command { rack, sequence: i }).unwrap();
         if i == 40 {
             input[0][128] = f32::NAN;
@@ -89,7 +107,7 @@ fn complete_callback_is_allocation_free_through_edits_faults_and_panic() {
 #[test]
 fn queue_is_bounded_and_atomic_panic_wins_over_backlog() {
     let mut rack = Rack::default();
-    rack.engines[0].time_ms = 1.0;
+    rack.engines[0].stages[0].delay.time_ms = 1.0;
     let (mut sender, receiver) = rtrb::RingBuffer::new(8);
     let shared = Arc::new(Shared::new(8000));
     shared.publish_availability(shared.audit_generation(), Availability::ALL);
@@ -137,15 +155,19 @@ fn stale_availability_cannot_replace_newer_graph_inspection() {
 }
 
 #[test]
-fn maximum_rate_preparation_stays_within_eight_mib_dsp_budget() {
+fn maximum_rate_preparation_stays_within_documented_dsp_budget() {
     BYTES.with(|c| c.set(0));
     TRACK.with(|c| c.set(true));
     let processor = shr_fx::dsp::Processor::new(192000, Rack::default()).unwrap();
     TRACK.with(|c| c.set(false));
     let bytes = BYTES.with(Cell::get);
     assert!(
-        bytes < 8 * 1024 * 1024,
+        bytes < shr_fx::dsp::MAX_DSP_BYTES,
         "prepared DSP allocated {bytes} bytes"
+    );
+    println!(
+        "Maximum-rate prepared DSP: {bytes} bytes; budget {} bytes",
+        shr_fx::dsp::MAX_DSP_BYTES
     );
     drop(processor);
 }
