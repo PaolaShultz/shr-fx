@@ -139,17 +139,17 @@ owned return safely and visibly, preserving the other engine where possible.
 
 ## Starting references
 
-- `../shsynth/docs/AUDIO_GRAPH.md`: wet-aux behavior, tails, publication,
+- `../shr-daw/docs/AUDIO_GRAPH.md`: wet-aux behavior, tails, publication,
   bounded routing and memory, and measurements versus acceptance
-- `../shsynth/src/effects/reverb.rs`, `delay.rs`, `modulated_delay.rs`,
+- `../shr-daw/src/effects/reverb.rs`, `delay.rs`, `modulated_delay.rs`,
   `phaser.rs`, `tremolo_pan.rs`, `distortion.rs`, and `filter.rs`
-- `../shsynth/src/audio_graph_runtime.rs`, `audio_graph_client.rs`, and
+- `../shr-daw/src/audio_graph_runtime.rs`, `audio_graph_client.rs`, and
   `jack.rs`: inspect ownership carefully; extract only necessary pieces
 - `../rpi-tone-over-9000/README.md`: standalone live-input processor,
   background preparation, atomic chain changes, and touch control
 - `../shr-sampler/docs/HOST_ARCHITECTURE.md` and `LIVE_PROCESS_CONTRACT.md`:
   bounded host/queue/fault ownership patterns
-- `../shsynth/docs/CONTROLLER_INTERFACE.md` and controller profile/learn code
+- `../shr-daw/docs/CONTROLLER_INTERFACE.md` and controller profile/learn code
 
 ## Build order and acceptance
 
