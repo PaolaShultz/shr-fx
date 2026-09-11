@@ -12,7 +12,7 @@ One engine can run reverb + delay + chorus + exciter into a single stereo
 return. Rust, ratatui/crossterm, JACK audio and input-only ALSA Sequencer MIDI.
 The mixer keeps the dry signal.
 
-Version 0.3.0 expands the software baseline. Hardware-free tests cover DSP,
+Version 0.3.1 expands the software baseline. Hardware-free tests cover DSP,
 routing, controls, storage and terminal cleanup. Live audio quality, JACK
 headroom, xruns, temperature and physical latency still require an authorized
 on-device session. No live audio or MIDI hardware tests were run during creation.
