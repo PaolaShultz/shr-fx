@@ -1,21 +1,28 @@
-# shr-fx
+![SHR FX — two parallel effect engines](docs/assets/banner.svg)
 
-A standalone, wet-only send/return rack for a 40×13 touchscreen terminal.
-The Cargo package, executable and repository are named `shr-fx`.
-The launcher gadget ID stays `fx`; JACK/ALSA identities, `FX_DATA_ROOT` and
-the existing private data directories retain that stable ID.
+# SHR FX
 
-Two independent engines each offer one effect or a MultiFX mix of **2–8
-parallel effect slots**. Choose five reverb profiles, four delay characters with
-optional ping-pong, stereo/ensemble chorus, and a Warm/Bright harmonic exciter.
-One engine can run reverb + delay + chorus + exciter into a single stereo
-return. Rust, ratatui/crossterm, JACK audio and input-only ALSA Sequencer MIDI.
-The mixer keeps the dry signal.
+**A two-engine send-effects rack for a 40×13 touch terminal.** Mix reverb,
+delay, chorus and harmonic exciter across up to eight parallel slots per engine.
+Your mixer carries the dry signal; SHR FX supplies the wet returns.
 
-Version 0.3.1 expands the software baseline. Hardware-free tests cover DSP,
-routing, controls, storage and terminal cleanup. Live audio quality, JACK
-headroom, xruns, temperature and physical latency still require an authorized
-on-device session. No live audio or MIDI hardware tests were run during creation.
+[Build and run](#build-and-run) · [Controller guide](docs/INTERFACE.md) · [Screen gallery](docs/screens/README.md) · [Project status](docs/PLAN.md)
+
+## A rack you can touch
+
+<p>
+  <img src="docs/screens/00-rack.png" width="48%" alt="SHR FX offline rack with four configured effect slots" />
+  <img src="docs/screens/02-delay.png" width="48%" alt="SHR FX delay controls at the native 40 by 13 terminal size" />
+</p>
+
+Actual offline renderer captures using the terminal font. [Browse all screens](docs/screens/README.md).
+
+- **Two independent engines:** separate sends or a shared input, with mono and stereo return layouts.
+- **Parallel sound design:** five reverb profiles, four delay characters, chorus/ensemble and Warm/Bright exciter.
+- **Touch and controller operation:** guided MIDI learning, pickup, TAP, sound recall and visible panic/exit.
+
+The software baseline covers DSP, routing, storage and controls. Live listening,
+latency and JACK headroom remain separate [acceptance checks](docs/ACCEPTANCE.md).
 
 ## Build and run
 
@@ -49,6 +56,11 @@ Without an override, data lives in `$XDG_DATA_HOME/fx`, or
 `local.json` holds physical port identities and controller settings;
 `sounds/sound-01.json` through `sound-16.json` hold rack snapshots. No accounts,
 network, launcher SDK or sibling repository are required.
+
+## Operating guide
+
+<details>
+<summary>Controls, routing, effect palette, MIDI, DSP limits and shutdown</summary>
 
 ## Performance controls
 
@@ -332,3 +344,7 @@ owned JACK client, closes its MIDI input, frees buffers off-thread and returns
 to the caller. Normal exit and handled errors restore raw mode, cursor, mouse
 reporting and the alternate screen. It never stops the JACK server or changes
 services. Run directly or let `go` launch/wait for the ordinary `shr-fx` executable.
+
+</details>
+
+[Architecture](docs/ARCHITECTURE.md) · [Current plan](docs/PLAN.md) · [License](LICENSE)
