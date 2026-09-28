@@ -145,7 +145,7 @@ owned return safely and visibly, preserving the other engine where possible.
   `phaser.rs`, `tremolo_pan.rs`, `distortion.rs`, and `filter.rs`
 - `../shr-daw/src/audio_graph_runtime.rs`, `audio_graph_client.rs`, and
   `jack.rs`: inspect ownership carefully; extract only necessary pieces
-- `../rpi-tone-over-9000/README.md`: standalone live-input processor,
+- `../shr-tone-over-9000/README.md`: standalone live-input processor,
   background preparation, atomic chain changes, and touch control
 - `../shr-sampler/docs/HOST_ARCHITECTURE.md` and `LIVE_PROCESS_CONTRACT.md`:
   bounded host/queue/fault ownership patterns
