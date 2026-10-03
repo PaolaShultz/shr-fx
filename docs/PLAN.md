@@ -1,4 +1,4 @@
-# Current handoff — 2026-10-03
+# Current handoff — 2026-10-04
 
 The source-frame integration adapter is implemented around the existing digital
 delay. `libshr_fx.so` exposes the versioned C ABI in `include/shr_fx.h`; the
@@ -10,14 +10,35 @@ measurements belong to GigPies. Module checks and remaining limits are recorded
 in [Acceptance](ACCEPTANCE.md).
 
 GigPies validated the native f64 stereo adapter on Pi 4 against real USB capture,
-PA processing and recording on Pi 5. The final 600 s run used 384-frame periods,
+PA processing and recording on Pi 5. The historical v7 600 s run used 384-frame periods,
 3072-frame device buffers and 768-frame wet admission at 48 kHz. All retained
 samples, hashes, journal and dry/intended-DAC replay matched, with no xruns or
 wet loss. Separate packet and Brain-restart tests preserved raw/dry continuity
 and recovered both wet channels. Earlier 8 ms admission and smaller device
 buffers had retained failures; the larger final buffer is an explicit change
-to the bench latency budget. [Acceptance](ACCEPTANCE.md#native-f64-usb-integration--2026-10-03)
+to the bench latency budget. The user rejected its large-prefill latency.
+[Acceptance](ACCEPTANCE.md#native-f64-usb-integration--2026-10-03)
 records the measured artifact identities, timing, recovery and remaining limits.
+
+The current low-latency continuation keeps the native f64 FX code/library unchanged.
+GigPies now uses 48-frame periods, 192-frame capacity and zero silent prefill.
+Two/three-period device capacities and an earlier four-period long run have retained
+failures; process memory locking alone also failed. A diagnostic trace identified
+a locked-page migration wait during PA processing. The separately reserved H7
+comparison temporarily disables compaction of locked pages and restores the key
+after each trial. H7's 600 s run completed without USB xruns but failed the
+192-frame / 4 ms wet gate twice. H8 changed wet admission to 288 frames / 6 ms;
+its 600 s run retained 28.8 million exact frames with no xruns, wet loss or queue
+faults. Dry/DAC replay, recording and separate fault/restart/recovery checks passed.
+All owned settings were restored and resources released.
+
+H8 physical timing remains qualified: trusted windows measured 249–251 frames /
+5.1875–5.229167 ms, with two weak windows and two small one-frame changes late in
+the run. Cause, clock lock and exact converter continuity remain unresolved;
+`requires_review: true` stays in the evidence. These bounded digital/recovery
+results do not establish a perfectly fixed physical delay, full-show reliability
+or standalone JACK acceptance. [Acceptance](ACCEPTANCE.md#low-latency-host-continuation--h8-verified-with-physical-qualification)
+records the current result and preserved failures.
 
 The standalone release executable still starts offline. The completed v0.3
 UI/controller design has no unfinished implementation item. Actual controller

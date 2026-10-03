@@ -38,7 +38,105 @@ These regular-thread simulations do not measure JACK scheduling or hardware
 latency. Unchanged renderer/PTY work and audible/hardware tests were skipped in
 this module task; GigPies owns the authorized integrated device session.
 
+## Low-latency host continuation — H8 verified with physical qualification
+
+The user rejected the large-prefill latency measured below. Its v7 recordings,
+replay and recovery remain evidence for that configuration; they do not establish
+live latency acceptance. The continued GigPies work uses the same native f64 FX
+source and release-library hash. No FX algorithm or binary changed.
+
+H5 reduced processing to **48 frames / 1 ms**, with zero silent prefill and
+**192 frames / 4 ms** wet-return admission. At 144-frame device capacity and FIFO
+priority 20, both unrestricted CPU placement and CPU3 passed separate 30 s trials
+with exact stored samples and no xruns or missing wet packets. The left physical
+reference-to-capture offset was about 5.19–5.35 ms. These were short observations:
+the CPU3 fault trial later failed a capture read that took 3.558 ms wall time,
+and the two-period retry failed with blocking playback writes.
+
+Increasing capacity to 192 frames, while retaining zero silent prefill, passed
+packet/stall and Brain-restart checks at a 249-frame / 5.1875 ms physical offset.
+Its subsequent 600 s attempt failed after 36.914 s: a render took 3.597 ms wall
+time and 0.191 ms thread CPU. The incomplete take verified exactly. Spare device
+capacity and a stable measured offset did not establish long-run reliability.
+
+H6 process memory locking also failed the reliability gate. A separate diagnostic
+trace identified **6.219611 ms in `migration_entry_wait_on_locked`** during a load
+through SHR PA's `memset` linkage entry. This was a memory-migration wait, not an
+FX computation measurement. Both retained failed takes verified exactly, and
+process memory locking returned to zero. Trace overhead and the unresolved
+migration initiator remain explicit in the owning GigPies evidence.
+
+H7 uses a separately accepted, temporary one-key comparison:
+`vm.compact_unevictable_allowed` changes from 1 to 0 while the owned process locks
+memory, then returns to its original value after each trial. No persistent tuning
+is accepted by this comparison. With GigPies source `1539915`, the first 30 s run
+at 48-frame periods, 192-frame capacity, zero silent prefill, 192-frame wet
+admission and FIFO 20 on CPU3 retained **1.44 million exact frames**, with zero
+xruns or wet loss. All **577 physical windows** measured **249 frames / 5.1875 ms**.
+
+The H7 **600 s / 28.8 million-frame** run completed with zero USB xruns or queue
+errors. Direct ADC and all eight stored-stem hashes, dry replay and the journal
+matched exactly. All **11977 physical windows** measured **249 frames / 5.1875 ms**,
+with no weak windows or timing steps. Render maximum was **299.386 µs**, with no
+observed page faults or context switches inside render. Settings were restored.
+
+The **4 ms wet gate failed**: all **600000 returns** arrived, but two expired and
+two were missing when due. There were **189 DAC reference differences** against
+the intended loss-free replay. Network RTT p99/maximum was **428/4156.374 µs**;
+Brain FX processing p99/maximum was **18/77.129 µs**. This does not identify which
+network worker was delayed. The completed dry-path/recording and physical-timing
+checks do not turn the wet-deadline failure into a full integrated pass.
+
+H8 changed only wet admission to **288 frames / 6 ms**. The same v13 host and
+native f64 FX library retained 48 kHz, 48-frame periods, 192-frame device capacity,
+zero silent prefill, FIFO 20 on CPU3, process memory locking and the temporary
+compaction-key comparison. The **600 s / 28.8 million-frame** run completed with
+zero xruns, missing/expired wet packets, queue faults or network errors. All
+**600000 returns** arrived; direct ADC/eight PCM hashes, dry and intended-DAC
+replay, and the journal matched exactly.
+
+| H8 measured path | p99 | Maximum |
+|---|---:|---:|
+| PA host render section | 135 µs | 289.665 µs |
+| Network RTT | 426 µs | 3732.252 µs |
+| Brain FX processing per 48-frame packet | 18 µs | 84.962 µs |
+
+No render page faults, context switches or counter-observation errors were
+recorded. Separate 16 s packet-fault and Brain-restart trials each retained
+768000 exact frames with raw/dry continuity, no xruns and a gap-free journal.
+Both recovered wet output; restart required two acknowledged snapshots and
+retained seven expected network errors. The known 20 ms loss faded to zero over
+240 frames, with at most 0.621 PCM24 LSB residual error. The deliberately silent
+right output stayed silent. The deliberate local xrun and subsequent fresh-run
+recovery checks also passed their recorded-waveform verification.
+
+**Physical timing still requires review.** Of 11977 windows, 11975 were trusted
+and measured **249–251 frames / 5.1875–5.229167 ms**; two 100 ms windows had weak
+correlation. A 10 ms refinement found a one-frame increase near 513.71 s
+(correlation 0.580, weak), then another near 520.30 s (0.782, trusted). There were
+no persistent steps of at least 24 frames, but the small changes' cause, clock
+lock and exact converter sample continuity remain unresolved. The analyzer's
+`requires_review: true` is preserved; a perfectly fixed physical offset is not
+claimed. This qualification remains separate from the exact digital replay.
+
+Owned scheduling, affinity, memory locking and the original compaction-key value
+were restored; resources were released at 22:21 UTC on 2026-10-03, recorded in
+exchange ledger `38e31a0`. Detailed private H8 evidence is indexed by GigPies
+`artifacts/audio-hardware/2026-10-03/h8-trial-summary.json`,
+`h8-fault-assessment.json` and `h8-small-offset-review.json`.
+
+These physical observations use the working left route and include the recorded
+host/USB/converter timing. They do not isolate converter delay, measure acoustic
+latency or establish the complete standalone FX rack's live acceptance. The fixed
+FX echo remains an intentional **960-frame / 20 ms** delay, separate from the host
+admission budget. GigPies `docs/AUDIO_HARDWARE.md` owns reservations, exact settings,
+restoration reports, recordings and analysis. This documentation checkpoint
+checked local Markdown links and whitespace. Module tests, builds and opt-in
+cost/audition tests were intentionally skipped because module code was unchanged.
+
 ## Native f64 USB integration — 2026-10-03
+
+Historical v7 bench evidence follows; current latency acceptance is described above.
 
 GigPies completed fresh device and sample verification with native f64 FX source
 `6510ead9cea8e28a92d992a4147cda17a074c86f`. The release library was retained under
