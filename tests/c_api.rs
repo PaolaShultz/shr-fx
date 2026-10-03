@@ -28,6 +28,27 @@ impl Drop for Fx {
 }
 
 #[test]
+fn f64_sample_detail_and_feedback_survive_delay_storage_and_reset() {
+    let mut fx = Fx::new(48000, 2048);
+    let mut input = vec![0.0; 4096];
+    let mut output = vec![0.0; 4096];
+    input[0] = 0.5 + 2f64.powi(-40);
+    input[1] = -0.25 - 2f64.powi(-42);
+    for _ in 0..2 {
+        assert_eq!(fx.process(&input, &mut output), OK);
+        for ch in 0..2 {
+            // These low bits are lost by any f32 input, ring or output cast.
+            assert_eq!(output[960 * 2 + ch], input[ch] * 0.5);
+            assert_ne!(output[960 * 2 + ch], (input[ch] as f32 * 0.5) as f64);
+            // First repeat also requires native f64 filter/feedback coefficients.
+            let repeated = (input[ch] * (1.0 - 0.35)) * 0.25 * 0.5;
+            assert!((output[1920 * 2 + ch] - repeated).abs() < 1e-17);
+        }
+        unsafe { shr_fx_v1_reset(fx.0) };
+    }
+}
+
+#[test]
 fn wet_only_first_tap_is_exact_at_supported_and_nonintegral_rates() {
     for rate in [8000, 8001, 44_100, 48_000, 96_000, 192_000] {
         let mut fx = Fx::new(rate, 8192);

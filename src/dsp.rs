@@ -10,8 +10,70 @@ pub const MAX_RATE: u32 = 192_000;
 pub const MAX_DSP_BYTES: usize = 80 * 1024 * 1024;
 const FAULT_LIMIT: f32 = 16.0;
 const TAIL_SECONDS: f32 = 281.0;
-fn clean(x: f32) -> f32 {
-    if x.abs() < 1e-20 { 0.0 } else { x }
+/// Compile-time sample precision for the shared delay primitives. The rack keeps
+/// its f32 specialization; the integration adapter uses f64 storage/arithmetic.
+trait DelaySample:
+    Copy
+    + PartialOrd
+    + std::ops::Add<Output = Self>
+    + std::ops::Sub<Output = Self>
+    + std::ops::Mul<Output = Self>
+    + std::ops::Div<Output = Self>
+    + std::ops::AddAssign
+    + std::ops::SubAssign
+{
+    const ZERO: Self;
+    const ONE: Self;
+    fn from_f64(value: f64) -> Self;
+    fn as_usize(self) -> usize;
+    fn abs(self) -> Self;
+    fn round(self) -> Self;
+    fn fract(self) -> Self;
+    fn min(self, other: Self) -> Self;
+    fn max(self, other: Self) -> Self;
+    fn clamp(self, min: Self, max: Self) -> Self;
+}
+macro_rules! delay_sample {
+    ($sample:ty) => {
+        impl DelaySample for $sample {
+            const ZERO: Self = 0.0;
+            const ONE: Self = 1.0;
+            fn from_f64(value: f64) -> Self {
+                value as Self
+            }
+            fn as_usize(self) -> usize {
+                self as usize
+            }
+            fn abs(self) -> Self {
+                <$sample>::abs(self)
+            }
+            fn round(self) -> Self {
+                <$sample>::round(self)
+            }
+            fn fract(self) -> Self {
+                <$sample>::fract(self)
+            }
+            fn min(self, other: Self) -> Self {
+                <$sample>::min(self, other)
+            }
+            fn max(self, other: Self) -> Self {
+                <$sample>::max(self, other)
+            }
+            fn clamp(self, min: Self, max: Self) -> Self {
+                <$sample>::clamp(self, min, max)
+            }
+        }
+    };
+}
+delay_sample!(f32);
+delay_sample!(f64);
+
+fn clean<S: DelaySample>(x: S) -> S {
+    if x.abs() < S::from_f64(1e-20) {
+        S::ZERO
+    } else {
+        x
+    }
 }
 fn slew(x: &mut f32, target: f32, amount: f32) {
     *x += (target - *x).clamp(-amount, amount);
@@ -20,15 +82,15 @@ fn safe(x: f32) -> bool {
     x.is_finite() && x.abs() <= FAULT_LIMIT
 }
 
-struct Ring {
-    data: Vec<f32>,
+struct Ring<S: DelaySample = f32> {
+    data: Vec<S>,
     pos: usize,
     valid: usize,
 }
-impl Ring {
+impl<S: DelaySample> Ring<S> {
     fn new(len: usize) -> Self {
         Self {
-            data: vec![0.0; len.max(4)],
+            data: vec![S::ZERO; len.max(4)],
             pos: 0,
             valid: 0,
         }
@@ -37,103 +99,124 @@ impl Ring {
         self.pos = 0;
         self.valid = 0;
     }
-    fn push(&mut self, value: f32) {
+    fn push(&mut self, value: S) {
         self.data[self.pos] = clean(value);
         self.pos = (self.pos + 1) % self.data.len();
         self.valid = (self.valid + 1).min(self.data.len());
     }
-    fn at(&self, delay: usize) -> f32 {
+    fn at(&self, delay: usize) -> S {
         if delay == 0 || delay > self.valid {
-            0.0
+            S::ZERO
         } else {
             self.data[(self.pos + self.data.len() - delay) % self.data.len()]
         }
     }
-    fn read(&self, delay: f32) -> f32 {
-        let delay = delay.clamp(1.0, (self.data.len() - 2) as f32);
-        let n = delay as usize;
+    fn read(&self, delay: S) -> S {
+        let delay = delay.clamp(S::ONE, S::from_f64((self.data.len() - 2) as f64));
+        let n = delay.as_usize();
         let a = self.at(n);
-        a + (self.at(n + 1) - a) * (delay - n as f32)
+        a + (self.at(n + 1) - a) * (delay - S::from_f64(n as f64))
     }
 }
 /// Crossfade both read positions for 20 ms; rapid requests coalesce.
-struct Tap {
-    from: f32,
-    to: f32,
-    phase: f32,
-    step: f32,
+struct Tap<S: DelaySample = f32> {
+    from: S,
+    to: S,
+    phase: S,
+    step: S,
 }
-impl Tap {
-    fn new(delay: f32, rate: f32) -> Self {
+impl<S: DelaySample> Tap<S> {
+    fn new(delay: S, rate: S) -> Self {
         Self {
             from: delay,
             to: delay,
-            phase: 1.0,
-            step: 1.0 / (rate * 0.02),
+            phase: S::ONE,
+            step: S::ONE / (rate * S::from_f64(0.02)),
         }
     }
-    fn advance(&mut self, desired: f32) {
-        if self.phase >= 1.0 && (desired - self.to).abs() > 0.1 {
+    fn advance(&mut self, desired: S) {
+        if self.phase >= S::ONE && (desired - self.to).abs() > S::from_f64(0.1) {
             self.from = self.to;
             self.to = desired;
-            self.phase = 0.0;
+            self.phase = S::ZERO;
         }
-        self.phase = (self.phase + self.step).min(1.0);
+        self.phase = (self.phase + self.step).min(S::ONE);
     }
-    fn read(&self, ring: &Ring) -> f32 {
-        self.offset_read(ring, 1.0, 0.0)
+    fn read(&self, ring: &Ring<S>) -> S {
+        self.offset_read(ring, S::ONE, S::ZERO)
     }
-    fn offset_read(&self, ring: &Ring, fraction: f32, offset: f32) -> f32 {
-        ring.read(self.from * fraction + offset) * (1.0 - self.phase)
+    fn offset_read(&self, ring: &Ring<S>, fraction: S, offset: S) -> S {
+        ring.read(self.from * fraction + offset) * (S::ONE - self.phase)
             + ring.read(self.to * fraction + offset) * self.phase
     }
 }
 /// Smooth parabolic oscillator: deterministic phases, no random source or
 /// per-sample transcendental work. Every call advances by less than one cycle.
-fn oscillator(phase: &mut f32, step: f32) -> f32 {
+fn oscillator<S: DelaySample>(phase: &mut S, step: S) -> S {
     *phase += step;
-    if *phase >= 1.0 {
-        *phase -= 1.0;
+    if *phase >= S::ONE {
+        *phase -= S::ONE;
     }
-    let x = *phase * 2.0 - 1.0;
-    4.0 * x * (1.0 - x.abs())
+    let x = *phase * S::from_f64(2.0) - S::ONE;
+    S::from_f64(4.0) * x * (S::ONE - x.abs())
 }
-struct Allpass {
-    ring: Ring,
-    length: f32,
+struct Allpass<S: DelaySample = f32> {
+    ring: Ring<S>,
+    length: S,
 }
-impl Allpass {
-    fn new(rate: f32, ms: f32) -> Self {
+impl<S: DelaySample> Allpass<S> {
+    fn new(rate: S, ms: S) -> Self {
         Self {
-            ring: Ring::new((rate * 0.016) as usize + 4),
-            length: (rate * ms / 1000.0).round(),
+            ring: Ring::new((rate * S::from_f64(0.016)).as_usize() + 4),
+            length: (rate * ms / S::from_f64(1000.0)).round(),
         }
     }
-    fn tick(&mut self, input: f32) -> f32 {
+    fn tick(&mut self, input: S) -> S {
         let delayed = self.ring.read(self.length);
-        let out = delayed - input * 0.5;
-        self.ring.push(input + out * 0.5);
+        let out = delayed - input * S::from_f64(0.5);
+        self.ring.push(input + out * S::from_f64(0.5));
         clean(out)
     }
 }
-struct Delay {
-    rings: [Ring; 2],
-    low: [f32; 2],
-    tap: Tap,
-    diffusers: [[Allpass; 2]; 2],
-    phases: [f32; 2],
-    seed: f32,
+struct DelayParameters<S: DelaySample> {
+    kind: DelayKind,
+    feedback: S,
+    damping: S,
+    ping_pong: bool,
 }
-impl Delay {
-    fn new(rate: f32, ms: f32, seed: f32) -> Self {
+impl From<crate::model::DelayConfig> for DelayParameters<f32> {
+    fn from(config: crate::model::DelayConfig) -> Self {
         Self {
-            rings: std::array::from_fn(|_| Ring::new((rate * 2.0) as usize + 4)),
-            low: [0.0; 2],
-            tap: Tap::new(ms * rate / 1000.0, rate),
+            kind: config.kind,
+            feedback: config.feedback,
+            damping: config.damping,
+            ping_pong: config.ping_pong,
+        }
+    }
+}
+struct Delay<S: DelaySample = f32> {
+    rings: [Ring<S>; 2],
+    low: [S; 2],
+    tap: Tap<S>,
+    diffusers: [[Allpass<S>; 2]; 2],
+    phases: [S; 2],
+    seed: S,
+}
+impl<S: DelaySample> Delay<S> {
+    fn new(rate: S, ms: S, seed: S) -> Self {
+        Self {
+            rings: std::array::from_fn(|_| Ring::new((rate * S::from_f64(2.0)).as_usize() + 4)),
+            low: [S::ZERO; 2],
+            tap: Tap::new(ms * rate / S::from_f64(1000.0), rate),
             diffusers: std::array::from_fn(|c| {
-                std::array::from_fn(|n| Allpass::new(rate, [3.7, 1.3][n] + c as f32 * 0.4))
+                std::array::from_fn(|n| {
+                    Allpass::new(
+                        rate,
+                        S::from_f64([3.7, 1.3][n]) + S::from_f64(c as f64) * S::from_f64(0.4),
+                    )
+                })
             }),
-            phases: [seed, (seed + 0.31).fract()],
+            phases: [seed, (seed + S::from_f64(0.31)).fract()],
             seed,
         }
     }
@@ -146,41 +229,45 @@ impl Delay {
                 a.ring.clear();
             }
         }
-        self.low = [0.0; 2];
-        self.phases = [self.seed, (self.seed + 0.31).fract()];
+        self.low = [S::ZERO; 2];
+        self.phases = [self.seed, (self.seed + S::from_f64(0.31)).fract()];
     }
     fn tick(
         &mut self,
-        mut input: [f32; 2],
-        time: f32,
-        config: crate::model::DelayConfig,
-        rate: f32,
+        mut input: [S; 2],
+        time: S,
+        config: DelayParameters<S>,
+        rate: S,
         mono: bool,
-    ) -> [f32; 2] {
+    ) -> [S; 2] {
         self.tap.advance(time);
         if mono && config.ping_pong {
-            input[1] = 0.0;
+            input[1] = S::ZERO;
         }
         let tape = config.kind == DelayKind::Tape;
         let offset = if tape {
-            (oscillator(&mut self.phases[0], 0.37 / rate) * 0.35
-                + oscillator(&mut self.phases[1], 6.1 / rate) * 0.08)
+            (oscillator(&mut self.phases[0], S::from_f64(0.37) / rate) * S::from_f64(0.35)
+                + oscillator(&mut self.phases[1], S::from_f64(6.1) / rate) * S::from_f64(0.08))
                 * rate
-                / 1000.0
+                / S::from_f64(1000.0)
         } else {
-            0.0
+            S::ZERO
         };
-        let main: [f32; 2] =
-            std::array::from_fn(|c| self.tap.offset_read(&self.rings[c], 1.0, offset));
+        let main: [S; 2] =
+            std::array::from_fn(|c| self.tap.offset_read(&self.rings[c], S::ONE, offset));
         let mut out = main;
         if config.kind == DelayKind::MultiTap {
             for (c, sample) in out.iter_mut().enumerate() {
-                *sample = main[c] * 0.5
+                *sample = main[c] * S::from_f64(0.5)
+                    + self.tap.offset_read(
+                        &self.rings[c],
+                        S::from_f64(if c == 0 { 0.5 } else { 0.625 }),
+                        S::ZERO,
+                    ) * S::from_f64(0.25)
                     + self
                         .tap
-                        .offset_read(&self.rings[c], if c == 0 { 0.5 } else { 0.625 }, 0.0)
-                        * 0.25
-                    + self.tap.offset_read(&self.rings[c], 0.75, 0.0) * 0.25;
+                        .offset_read(&self.rings[c], S::from_f64(0.75), S::ZERO)
+                        * S::from_f64(0.25);
             }
         } else if config.kind == DelayKind::Diffused {
             for (c, sample) in out.iter_mut().enumerate() {
@@ -190,18 +277,18 @@ impl Delay {
             }
         }
         let damping = if tape {
-            config.damping.max(0.35)
+            config.damping.max(S::from_f64(0.35))
         } else {
             config.damping
         };
         for (c, sample) in main.into_iter().enumerate() {
-            self.low[c] = clean(self.low[c] * damping + sample * (1.0 - damping));
+            self.low[c] = clean(self.low[c] * damping + sample * (S::ONE - damping));
         }
         for (c, sample) in input.into_iter().enumerate() {
             let value =
                 sample + self.low[if config.ping_pong { 1 - c } else { c }] * config.feedback;
             self.rings[c].push(if tape {
-                value / (1.0 + 0.12 * value.abs())
+                value / (S::ONE + S::from_f64(0.12) * value.abs())
             } else {
                 value
             });
@@ -213,18 +300,18 @@ impl Delay {
 /// The first tap is exactly the rounded 20 ms frame count, including at rates
 /// where 20 ms is not an integral number of frames. No additional block delay.
 pub(crate) struct IntegrationDelay {
-    delay: Delay,
-    rate: f32,
+    delay: Delay<f64>,
+    rate: f64,
     frames: u32,
 }
 impl IntegrationDelay {
     pub(crate) fn new(rate: u32) -> Self {
         let frames = (rate + 25) / 50;
-        let mut delay = Delay::new(rate as f32, 20.0, 0.13);
-        delay.tap = Tap::new(frames as f32, rate as f32);
+        let mut delay = Delay::new(f64::from(rate), 20.0, 0.13);
+        delay.tap = Tap::new(f64::from(frames), f64::from(rate));
         Self {
             delay,
-            rate: rate as f32,
+            rate: f64::from(rate),
             frames,
         }
     }
@@ -234,18 +321,15 @@ impl IntegrationDelay {
     pub(crate) fn clear(&mut self) {
         self.delay.clear();
     }
-    pub(crate) fn tick(&mut self, input: [f32; 2]) -> [f32; 2] {
+    pub(crate) fn tick(&mut self, input: [f64; 2]) -> [f64; 2] {
         self.delay
             .tick(
                 input,
-                self.frames as f32,
-                crate::model::DelayConfig {
+                f64::from(self.frames),
+                DelayParameters {
                     kind: DelayKind::Digital,
-                    time_ms: 20.0,
                     feedback: 0.25,
                     damping: 0.35,
-                    sync: false,
-                    division: 0,
                     ping_pong: false,
                 },
                 self.rate,
@@ -524,7 +608,7 @@ impl Slot {
                 self.delay.tick(
                     input,
                     target.delay.milliseconds(tempo) * self.rate / 1000.0,
-                    config,
+                    config.into(),
                     self.rate,
                     mono,
                 )
@@ -862,5 +946,46 @@ impl Processor {
             }
         }
         meters
+    }
+}
+
+#[cfg(test)]
+mod precision_tests {
+    use super::*;
+
+    #[test]
+    fn shared_f32_delay_retains_prior_sample_bits() {
+        // Captured from the original 88a28ac release ABI, whose internal delay
+        // was f32. Protect the rack specialization through shared-core changes.
+        let expected = [
+            (960, [0x3e800000, 0xbe000000]),
+            (1920, [0x3d266666, 0xbca66666]),
+            (1921, [0x3c68f5c2, 0xbbe8f5c2]),
+            (1922, [0x3ba3126e, 0xbb23126e]),
+            (1923, [0x3ae44d00, 0xba644d00]),
+            (2880, [0x3bd851ea, 0xbb5851ea]),
+            (2881, [0x3b976c8a, 0xbb176c8a]),
+            (2882, [0x3b1efec4, 0xba9efec4]),
+            (3840, [0x3a8c9ba5, 0xba0c9ba5]),
+        ];
+        let mut delay: Delay<f32> = Delay::new(48000.0, 20.0, 0.13);
+        let config = crate::model::DelayConfig {
+            feedback: 0.25,
+            damping: 0.35,
+            ..Default::default()
+        };
+        let mut check = 0;
+        for frame in 0..=3840 {
+            let input = if frame == 0 { [0.5, -0.25] } else { [0.0; 2] };
+            let wet = delay.tick(input, 960.0, config.into(), 48000.0, false);
+            if frame == expected[check].0 {
+                assert_eq!(wet.map(|x| (x * 0.5).to_bits()), expected[check].1);
+                check += 1;
+                if check == expected.len() {
+                    break;
+                }
+            }
+        }
+        assert_eq!(check, expected.len());
     }
 }

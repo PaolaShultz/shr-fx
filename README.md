@@ -64,8 +64,9 @@ network, launcher SDK or sibling repository are required.
 The same release build produces `target/release/libshr_fx.so`, with the
 [versioned C interface](include/shr_fx.h) for a device-independent stereo wet
 return. It reuses the rack's Digital Delay as a fixed 20 ms echo with 0.25
-feedback and 0.5 wet gain. The f64 interface converts through existing **f32**
-DSP; the adapter adds no block buffering. At 48 kHz its intentional first tap
+feedback and 0.5 wet gain. The adapter uses native **f64** DSP and retained state
+through the shared delay algorithm; the standalone rack retains f32 processing.
+The adapter adds no block buffering. At 48 kHz its intentional first tap
 is exactly 960 source frames. Hosts own discontinuity reset, wet fades and
 source-frame scheduling; see the [ABI contract](docs/ARCHITECTURE.md#versioned-source-frame-adapter).
 Loading this library does not open audio/MIDI devices or start the standalone UI.

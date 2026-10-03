@@ -3,18 +3,22 @@
 The source-frame integration adapter is implemented around the existing digital
 delay. `libshr_fx.so` exposes the versioned C ABI in `include/shr_fx.h`; the
 fixed stereo wet preset has exactly 20 ms of intentional echo delay (rounded to
-source frames), with no extra adapter buffering. Its f64 boundary uses existing
-f32 DSP internally. Host integration, source epochs, transport and hardware
+source frames), with no extra adapter buffering. Its shared delay core now uses
+native f64 samples, state and coefficients; the standalone rack retains f32.
+Host integration, source epochs, transport and hardware
 measurements belong to GigPies. Module checks and remaining limits are recorded
 in [Acceptance](ACCEPTANCE.md).
 
-GigPies has exercised this fixed stereo adapter on Pi 4 against real USB capture,
+GigPies exercised the earlier f32 stereo adapter on Pi 4 against real USB capture,
 PA processing and recording on Pi 5. Short trials verified recorded samples and
 exact PA/FX-to-DAC replay. A 600 s run preserved dry/recorded continuity but missed
 one wet deadline at the original 8 ms admission target. The explicitly revised
-16 ms budget passed a 30 s comparison; final fault repetitions and a 600 s run at
-that budget remain pending. [Acceptance](ACCEPTANCE.md#embedded-stereo-usb-integration--2026-10-03)
-records the narrow embedded scope and unresolved physical return measurement.
+16 ms budget later had a playback xrun with 192-frame periods. A 600 s run with
+384-frame periods and 1536-frame buffers then passed frame/hash/replay checks
+with no xruns or wet loss. Those results remain evidence for the earlier f32
+artifact; hardware validation of the native f64 adapter is pending.
+[Acceptance](ACCEPTANCE.md#embedded-stereo-usb-integration--2026-10-03) records the
+narrow embedded scope and unresolved physical return measurement.
 
 The standalone release executable still starts offline. The completed v0.3
 UI/controller design has no unfinished implementation item. Actual controller

@@ -16,9 +16,15 @@ sample from an impulse at frame 0 is at frame **960**; `delay_frames` reports
 that exact onset. There is no extra adapter block buffering or startup ramp.
 Network/host playout delay and physical converter latency are separate. For
 example an 8 ms return-admission budget does not turn this echo into an 8 ms
-effect. The boundary accepts/returns f64, but the existing effect and state are
-**f32**; conversion happens one stereo pair at a time. This does not establish
-an all-f64 DSP path or improve the precision of source samples.
+effect. The boundary, sample storage, filter/feedback history, coefficients and
+delay arithmetic use **f64** throughout. The existing `Ring`, `Tap`, `Allpass`
+and `Delay` implementations are shared through compile-time f32/f64
+specialization; no separate delay algorithm was added. The standalone rack
+continues to use f32 for the same primitives and retains its existing memory
+budget. Only the integration adapter's sample storage doubles. Persisted rack
+controls retain their f32 schema; the fixed adapter coefficients are prepared
+directly as f64. The host still owns any transport encoding: a float32 wet
+packet must be explicitly quantized for exact integration replay.
 
 `create(rate, max_block)` prepares rates 8000–192000 Hz and block bounds
 1–8192 frames, returning null on invalid bounds. Creation and destruction

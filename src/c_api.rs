@@ -1,7 +1,7 @@
 //! Versioned device-independent stereo wet-return ABI. See `include/shr_fx.h`.
 //!
 //! Handles have one owner; callers serialize all operations on each handle.
-//! The f64 wire boundary converts pairs through the existing f32 DSP. Process
+//! The f64 boundary uses the shared delay algorithm with f64 state/arithmetic. Process
 //! and reset do not allocate, free, lock, perform I/O or inspect host clocks.
 
 use crate::dsp::{IntegrationDelay, MAX_FRAMES, MAX_RATE};
@@ -93,12 +93,7 @@ pub unsafe extern "C" fn shr_fx_v1_process(
     for frame in 0..frames as usize {
         let index = frame * 2;
         // SAFETY: both reads precede writes, so exact in-place use is valid.
-        let pair = unsafe {
-            [
-                input.add(index).read() as f32,
-                input.add(index + 1).read() as f32,
-            ]
-        };
+        let pair = unsafe { [input.add(index).read(), input.add(index + 1).read()] };
         let wet = handle.delay.tick(pair);
         if wet.iter().any(|sample| !sample.is_finite()) {
             handle.delay.clear();
@@ -108,8 +103,8 @@ pub unsafe extern "C" fn shr_fx_v1_process(
         }
         // SAFETY: disjoint or exactly equal arrays and valid output extent.
         unsafe {
-            output.add(index).write(wet[0] as f64);
-            output.add(index + 1).write(wet[1] as f64);
+            output.add(index).write(wet[0]);
+            output.add(index + 1).write(wet[1]);
         }
     }
     OK

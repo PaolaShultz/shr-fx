@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 /* Single-owner handle. Creation/destruction are control-thread operations.
- * Stereo samples are interleaved L,R doubles; internal DSP precision is f32.
+ * Stereo samples are interleaved L,R doubles; DSP and retained state are f64.
  * No process/reset allocation, locks, I/O or host-clock dependence.
  * See docs/ARCHITECTURE.md for sample, pointer and discontinuity contracts. */
 void *shr_fx_v1_create(uint32_t sample_rate, uint32_t max_block);

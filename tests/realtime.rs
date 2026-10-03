@@ -56,7 +56,8 @@ fn c_abi_processing_reset_and_fault_recovery_do_not_allocate_or_free() {
     use shr_fx::c_api::*;
     let handle = shr_fx_v1_create(192000, 8192);
     assert!(!handle.is_null());
-    let mut input = vec![0.5; 16384];
+    let precise = 0.5 + 2f64.powi(-40);
+    let mut input = vec![precise; 16384];
     let mut output = vec![0.0; 16384];
     tracked(|| unsafe {
         assert_eq!(shr_fx_v1_delay_frames(handle), 3840);
@@ -64,6 +65,7 @@ fn c_abi_processing_reset_and_fault_recovery_do_not_allocate_or_free() {
             shr_fx_v1_process(handle, input.as_ptr(), output.as_mut_ptr(), 8192),
             OK
         );
+        assert_eq!(output[3840 * 2], precise * 0.5);
         shr_fx_v1_reset(handle);
         input[16383] = f64::NAN;
         assert_eq!(

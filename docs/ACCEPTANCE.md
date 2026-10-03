@@ -1,4 +1,49 @@
-# Source-frame adapter verification — 2026-10-03
+# Native f64 source-frame adapter — 2026-10-03
+
+The current adapter runs the same digital-delay algorithm with f64 samples,
+coefficients, interpolation and retained state. Shared `Ring`, `Tap`, `Allpass`
+and `Delay` types specialize at compile time for f32 or f64. The standalone
+rack keeps its f32 specialization and schema. The five C signatures, first-tap
+delay, stereo identity, reset and error behavior are unchanged. This replaces
+the initial adapter's f64-to-f32 conversion rather than adding another delay
+implementation.
+
+New normal regressions preserve input detail below f32 resolution through the
+first tap and feedback, verify direct f64 damping coefficients and repeat after
+reset. The maximum-rate allocation test also checks that detail while tracking
+all allocations/frees. A separate regression checks the f32 specialization
+against exact first-tap and repeated-echo sample bits captured from the original
+`88a28ac` release library. Existing rack, stereo, reset, bounds and fault tests
+remain in the complete normal suite.
+
+Observed checks with Rust 1.97.1 and `CARGO_INCREMENTAL=0`:
+
+| Check | Result |
+|---|---|
+| Focused ABI/realtime tests | 11 passed |
+| Complete normal suite, `cargo test --locked` | 101 passed; cost matrix remains opt-in |
+| `cargo fmt --all -- --check` | Passed |
+| `cargo clippy --locked --all-targets -- -D warnings` | Passed |
+| `cargo build --release --locked` | Passed |
+| Dynamic release ABI, 48-frame blocks | Sub-f32 detail, stereo first tap, feedback and reset passed |
+| Opt-in release cost matrix | All ten cases passed finite/fault checks in 95.78 s |
+| C header syntax, local Markdown links and staged whitespace | Passed |
+
+The cost matrix ran because this change touches the shared processing primitives
+used by the rack. It retains its documented opt-in command below. The one/two
+four-effect vocal cases had p99/max processing times of 0.245/0.355 ms and
+0.533/0.879 ms. Sixteen halls reached **8.566 ms**, exceeding the nominal
+5.333 ms period; they remain unsuitable for a live timing acceptance claim.
+These regular-thread simulations do not measure JACK scheduling or hardware
+latency. Unchanged renderer/PTY work and audible/hardware tests were skipped in
+this module task; GigPies owns the authorized integrated device session.
+
+The existing device results below belong to the earlier f32 library. They are
+not hardware acceptance for this numerical change. GigPies owns fresh replay
+and device checks using the new artifact; exact replay must include the host's
+float32 return-packet conversion even though the FX core now processes in f64.
+
+# Initial f32 source-frame adapter verification — 2026-10-03
 
 The versioned C ABI reuses the existing Digital Delay with a fixed 20 ms first
 tap, 0.25 feedback, 0.35 damping and 0.5 wet gain. It preserves L/R identity,
@@ -58,11 +103,15 @@ The coordinator reported these observed results:
 | First 600 s run, original 8 ms return admission | 28.8 million dry/recorded frames exact, zero xruns; all 600000 returns arrived, but one expired and one wet packet was missing: zero-loss target **failed** |
 | Revised 16 ms admission, 30 s comparison | 1.44 million frames exact; no wet loss |
 | Separate 15 s packet/stall and Brain process termination/restart trials | 720000 dry/recorded frames exact in each trial; both wet channels faded to zero over 240 frames and recovered with fresh control state |
+| Later 16 ms admission soak with 192-frame periods | Playback EPIPE after about 10.28 s; zero wet loss, recording retained as incomplete |
+| Revised 16 ms admission with 384-frame periods / 1536-frame buffers, 600 s | 28.8 million frames; direct ADC/eight PCM hashes, journal, dry and intended-DAC replay exact; zero xruns, wet loss or queue errors |
 
 The 16 ms admission budget is an explicit revision after the failed 8 ms soak;
-the delay's intentional 20 ms remains additional. Final fault repetitions and
-the full 600 s run at 16 ms were still pending at this documentation handoff.
-The short comparison does not establish sustained acceptance of that budget.
+the delay's intentional 20 ms remains additional. The 384-frame configuration
+followed the playback xrun at 192 frames; its 600 s pass is a bounded observation,
+not a full-show reliability claim. All these trials used the archived f32
+adapter, whose source and library hash remain recorded in the integration
+evidence. Fresh native f64 hardware results are not inferred from them.
 
 These results apply to one embedded stereo delay. They do not establish the
 standalone JACK rack, two full engines, eight parallel slots per engine, or
@@ -70,8 +119,8 @@ acoustic/listening acceptance. The recorded DAC pair is submitted digital PCM,
 not a measured physical return; converter-to-output latency remains unresolved
 without a return route. GigPies owns the detailed topology, host revisions,
 reservations and measurements in its `docs/AUDIO_HARDWARE.md`, with recordings
-and exact artifact hashes retained in its private task evidence. This owner
-documentation update changes no DSP code or measured library artifact.
+and exact artifact hashes retained in its private task evidence. The original
+measured library remains archived separately from the new native f64 build.
 
 # Performance interface verification — 2026-09-08
 
