@@ -9,22 +9,23 @@ Host integration, source epochs, transport and hardware
 measurements belong to GigPies. Module checks and remaining limits are recorded
 in [Acceptance](ACCEPTANCE.md).
 
-GigPies exercised the earlier f32 stereo adapter on Pi 4 against real USB capture,
-PA processing and recording on Pi 5. Short trials verified recorded samples and
-exact PA/FX-to-DAC replay. A 600 s run preserved dry/recorded continuity but missed
-one wet deadline at the original 8 ms admission target. The explicitly revised
-16 ms budget later had a playback xrun with 192-frame periods. A 600 s run with
-384-frame periods and 1536-frame buffers then passed frame/hash/replay checks
-with no xruns or wet loss. Those results remain evidence for the earlier f32
-artifact; hardware validation of the native f64 adapter is pending.
-[Acceptance](ACCEPTANCE.md#embedded-stereo-usb-integration--2026-10-03) records the
-narrow embedded scope and unresolved physical return measurement.
+GigPies validated the native f64 stereo adapter on Pi 4 against real USB capture,
+PA processing and recording on Pi 5. The final 600 s run used 384-frame periods,
+3072-frame device buffers and 768-frame wet admission at 48 kHz. All retained
+samples, hashes, journal and dry/intended-DAC replay matched, with no xruns or
+wet loss. Separate packet and Brain-restart tests preserved raw/dry continuity
+and recovered both wet channels. Earlier 8 ms admission and smaller device
+buffers had retained failures; the larger final buffer is an explicit change
+to the bench latency budget. [Acceptance](ACCEPTANCE.md#native-f64-usb-integration--2026-10-03)
+records the measured artifact identities, timing, recovery and remaining limits.
 
 The standalone release executable still starts offline. The completed v0.3
 UI/controller design has no unfinished implementation item. Actual controller
 setup, touch usability, listening and standalone JACK/thermal/latency acceptance
 remain separate hardware work. The adapter's offline validation cannot establish
-those results or the integrating host's physical output timing.
+those results; its embedded device measurements also leave physical loopback,
+analogue channel wiring and acoustic quality unverified. A suitable attenuated
+return route remains necessary for physical latency measurement.
 
 ## Delivered behavior
 

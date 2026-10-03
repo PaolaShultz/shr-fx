@@ -38,10 +38,60 @@ These regular-thread simulations do not measure JACK scheduling or hardware
 latency. Unchanged renderer/PTY work and audible/hardware tests were skipped in
 this module task; GigPies owns the authorized integrated device session.
 
-The existing device results below belong to the earlier f32 library. They are
-not hardware acceptance for this numerical change. GigPies owns fresh replay
-and device checks using the new artifact; exact replay must include the host's
-float32 return-packet conversion even though the FX core now processes in f64.
+## Native f64 USB integration — 2026-10-03
+
+GigPies completed fresh device and sample verification with native f64 FX source
+`6510ead9cea8e28a92d992a4147cda17a074c86f`. The release library was retained under
+a versioned filename with SHA-256
+`6285cb51b156666c3bb33a8f14f428ee676ee619ef2bd704293e981c2e32e2ec`.
+The measured host artifact SHA-256 was
+`c4b8627790797cda04dc95ff5f3c4454c46ba142f77772f8557123b50694d7c5`.
+
+Pi 4 followed 48-frame / 1 ms stereo packets without an audio device. Pi 5 owned
+the AudioBox USB stereo capture/output, PA processing and recording at 48 kHz,
+with **384-frame periods and 3072-frame device buffers** (8/64 ms). Wet return
+admission was **768 frames / 16 ms**, separate from the fixed delay's intentional
+**960 frames / 20 ms**. Float32 send/return encoding remains deliberate; exact
+offline replay included that conversion around the native f64 FX core.
+
+The final 600 s run retained **28.8 million frames** with zero xruns, missing or
+expired wet packets, or queue errors. All **600000 returns** arrived. Direct ADC
+and all eight PCM hashes matched; the journal had no gaps; dry and intended-DAC
+replay matched every sample. The eight stems describe two physical ADC channels
+plus source, dry and DAC-submitted stereo audit taps.
+
+| Measured path | p99 | Maximum |
+|---|---:|---:|
+| PA host render section | 1.123 ms | 4.948832 ms |
+| Complete post-read host service | 1.290 ms | 5.232607 ms |
+| Network RTT | 0.565 ms | 1.977299 ms |
+| Pi 4 FX processing per 48-frame packet | 0.029 ms | 0.121814 ms |
+
+Separate 15 s packet/stall and Brain-restart tests each retained 720000 frames
+with exact raw/dry continuity and no xruns. Both wet channels recovered, and the
+known loss burst faded to zero over 240 frames. A deliberate 100 ms local driver
+stall stopped with an explicitly **incomplete** 96000-frame take; its retained
+samples verified exactly. These are bounded recovery observations.
+
+The preceding native f64 candidate with a **1536-frame buffer** failed during
+Brain restart with a playback underrun at about 5 s: 240000 frames were fully
+submitted and 240384 retained in an incomplete take. That failure remains
+evidence against accepting the smaller buffer. The final pass uses the larger
+3072-frame buffer and does not restore the earlier latency target. The separate
+sixteen-hall cost failure above also remains unaccepted.
+
+This validates one embedded stereo delay under the recorded bench conditions,
+not the full rack, standalone JACK performance or full-show reliability. No
+physical loopback was measured. No return connection is confirmed; the available
+mic/instrument inputs require suitable attenuation/DI
+for a return measurement. Digital DAC-submitted samples do not establish
+physical capture-to-output latency, analogue channel wiring or acoustic quality.
+
+Detailed topology, reservations and retained failures belong to GigPies
+`docs/AUDIO_HARDWARE.md`. Final private evidence is under GigPies
+`artifacts/audio-hardware/2026-10-03/soak-600s-buffer8-v7/`, including
+`verification.json`, host/peer reports and original recordings. This closeout
+changes documentation only; the measured code and library remain unchanged.
 
 # Initial f32 source-frame adapter verification — 2026-10-03
 
