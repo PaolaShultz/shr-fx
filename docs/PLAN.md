@@ -8,6 +8,14 @@ f32 DSP internally. Host integration, source epochs, transport and hardware
 measurements belong to GigPies. Module checks and remaining limits are recorded
 in [Acceptance](ACCEPTANCE.md).
 
+GigPies has exercised this fixed stereo adapter on Pi 4 against real USB capture,
+PA processing and recording on Pi 5. Short trials verified recorded samples and
+exact PA/FX-to-DAC replay. A 600 s run preserved dry/recorded continuity but missed
+one wet deadline at the original 8 ms admission target. The explicitly revised
+16 ms budget passed a 30 s comparison; final fault repetitions and a 600 s run at
+that budget remain pending. [Acceptance](ACCEPTANCE.md#embedded-stereo-usb-integration--2026-10-03)
+records the narrow embedded scope and unresolved physical return measurement.
+
 The standalone release executable still starts offline. The completed v0.3
 UI/controller design has no unfinished implementation item. Actual controller
 setup, touch usability, listening and standalone JACK/thermal/latency acceptance
@@ -35,7 +43,8 @@ those results or the integrating host's physical output timing.
   work. Routing/Ports round trips retain the logical routing draft.
 - Rack schema v3 and private local schema v2 have strict validation and read-only
   migration. Explicit legacy mappings remain compatible; physical identities
-  stay outside sounds. No live audio, hardware MIDI or OS configuration changed.
+  stay outside sounds. The standalone schema/controller implementation did not
+  change during the separate embedded USB integration.
 
 ## Where to resume
 

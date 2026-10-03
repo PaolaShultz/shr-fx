@@ -41,6 +41,38 @@ It retains the crate's native ALSA runtime dependency without opening a device.
 No publication guard or versioned hook configuration exists in this repository;
 the complete staged source/documentation change was reviewed before local commit.
 
+## Embedded stereo USB integration — 2026-10-03
+
+GigPies exercised the release adapter from source commit
+`88a28ac4b70670da3499edceb23bba1e0ed396c9` on Pi 4, following source frames in
+48-frame / 1 ms stereo packets. Pi 5 owned PA processing, recording and an
+AudioBox USB interface opened at 48 kHz with 192-frame periods and 768-frame
+buffers. FX remained the fixed wet-only 20 ms / 960-frame stereo delay described
+above, with f32 internal processing and no local audio device on Pi 4.
+
+The coordinator reported these observed results:
+
+| Integrated trial | Result |
+|---|---|
+| Short 3 s, 10 s and 30 s checks; generated-only startup smoke followed by capture plus probe | Exact recorded PCM and PA/FX-to-DAC replay; zero xruns |
+| First 600 s run, original 8 ms return admission | 28.8 million dry/recorded frames exact, zero xruns; all 600000 returns arrived, but one expired and one wet packet was missing: zero-loss target **failed** |
+| Revised 16 ms admission, 30 s comparison | 1.44 million frames exact; no wet loss |
+| Separate 15 s packet/stall and Brain process termination/restart trials | 720000 dry/recorded frames exact in each trial; both wet channels faded to zero over 240 frames and recovered with fresh control state |
+
+The 16 ms admission budget is an explicit revision after the failed 8 ms soak;
+the delay's intentional 20 ms remains additional. Final fault repetitions and
+the full 600 s run at 16 ms were still pending at this documentation handoff.
+The short comparison does not establish sustained acceptance of that budget.
+
+These results apply to one embedded stereo delay. They do not establish the
+standalone JACK rack, two full engines, eight parallel slots per engine, or
+acoustic/listening acceptance. The recorded DAC pair is submitted digital PCM,
+not a measured physical return; converter-to-output latency remains unresolved
+without a return route. GigPies owns the detailed topology, host revisions,
+reservations and measurements in its `docs/AUDIO_HARDWARE.md`, with recordings
+and exact artifact hashes retained in its private task evidence. This owner
+documentation update changes no DSP code or measured library artifact.
+
 # Performance interface verification — 2026-09-08
 
 Fructal Implement is complete for the local interface/controller scope. This
