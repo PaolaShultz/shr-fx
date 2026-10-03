@@ -23,9 +23,12 @@ The standalone release executable still starts offline. The completed v0.3
 UI/controller design has no unfinished implementation item. Actual controller
 setup, touch usability, listening and standalone JACK/thermal/latency acceptance
 remain separate hardware work. The adapter's offline validation cannot establish
-those results; its embedded device measurements also leave physical loopback,
-analogue channel wiring and acoustic quality unverified. A suitable attenuated
-return route remains necessary for physical latency measurement.
+those results. Subsequent physical probes verified left output to input 1; a
+12 s generated-only integrated trial retained exact recorded/replayed samples.
+The right return was 68.77 dB weaker and remains unresolved, so further physical
+work uses the verified left channel. The observed left loopback offset includes
+host prefill/startup, USB and converters; isolated converter latency and acoustic
+quality remain unverified.
 
 ## Delivered behavior
 

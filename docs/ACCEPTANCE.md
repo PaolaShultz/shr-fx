@@ -80,18 +80,34 @@ evidence against accepting the smaller buffer. The final pass uses the larger
 3072-frame buffer and does not restore the earlier latency target. The separate
 sixteen-hall cost failure above also remains unaccepted.
 
-This validates one embedded stereo delay under the recorded bench conditions,
-not the full rack, standalone JACK performance or full-show reliability. No
-physical loopback was measured. No return connection is confirmed; the available
-mic/instrument inputs require suitable attenuation/DI
-for a return measurement. Digital DAC-submitted samples do not establish
-physical capture-to-output latency, analogue channel wiring or acoustic quality.
+After the soak, separate generated-only physical checks verified **left output
+to input 1**. Two eight-second probes at −72/−54 dBFS completed without faults.
+At −54 dBFS, both separated left bursts had correlation 0.799 and the same
+**2739-frame / 57.0625 ms** reference-to-capture offset. That offset includes
+2688 frames of output prefill, staggered stream starts, USB transfers and
+converters. It is not isolated converter delay or capture-to-speaker latency;
+subtracting prefill would not isolate those contributions.
+
+The unchanged PA/FX/REC host then completed a generated-only 12 s trial at the
+same 384/3072/768 configuration: all 576000 frames, direct ADC/eight PCM hashes,
+dry/DAC replay and journal entries matched, without xruns or wet errors. The
+997 Hz left return gain was −0.674 dB; the 1499 Hz right return was −69.440 dB,
+**68.77 dB below the left**. The right route remains unusable and its analogue
+cause unproven. Further work is limited to the verified left channel until the
+right connection is resolved. Capture never fed playback in these trials.
+
+This validates one embedded stereo delay and the left physical return under
+the recorded bench conditions, not the full rack, standalone JACK performance,
+full-show reliability or acoustic quality. The two software channels remain
+verified; usable physical stereo return and isolated converter timing do not.
 
 Detailed topology, reservations and retained failures belong to GigPies
-`docs/AUDIO_HARDWARE.md`. Final private evidence is under GigPies
+`docs/AUDIO_HARDWARE.md`. The final soak's private evidence is under GigPies
 `artifacts/audio-hardware/2026-10-03/soak-600s-buffer8-v7/`, including
-`verification.json`, host/peer reports and original recordings. This closeout
-changes documentation only; the measured code and library remain unchanged.
+`verification.json`, host/peer reports and original recordings. The same
+integration document indexes the separate private physical probes and analyses.
+This update changes documentation only; the measured code and library remain
+unchanged.
 
 # Initial f32 source-frame adapter verification — 2026-10-03
 
