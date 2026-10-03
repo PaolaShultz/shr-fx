@@ -41,7 +41,8 @@ those results or the integrating host's physical output timing.
 
 | Need | Owning document |
 |---|---|
-| Build, run offline, operate and stop | [README](../README.md) |
+| Build and run offline | [README](../README.md) |
+| Operate, route and stop | [Operating guide](OPERATING_GUIDE.md) |
 | Complete map, setup, value ranges, menu/draft/recovery behavior | [Interaction contract](INTERFACE.md) |
 | DSP/control ownership, bounds and persistence schemas | [Architecture](ARCHITECTURE.md) |
 | Checks passed, cost evidence and remaining hardware acceptance | [Acceptance](ACCEPTANCE.md) |
