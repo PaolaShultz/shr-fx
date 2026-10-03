@@ -6,6 +6,9 @@ rust-version = "1.97"
 description = "Standalone wet-only dual-engine send effects rack"
 license = "MIT"
 
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [dependencies]
 ratatui = "=0.20.1"
 crossterm = "=0.26.1"

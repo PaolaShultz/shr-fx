@@ -52,6 +52,38 @@ fn tracked(f: impl FnOnce()) {
     assert_eq!(FREES.with(Cell::get), 0, "callback deallocation");
 }
 #[test]
+fn c_abi_processing_reset_and_fault_recovery_do_not_allocate_or_free() {
+    use shr_fx::c_api::*;
+    let handle = shr_fx_v1_create(192000, 8192);
+    assert!(!handle.is_null());
+    let mut input = vec![0.5; 16384];
+    let mut output = vec![0.0; 16384];
+    tracked(|| unsafe {
+        assert_eq!(shr_fx_v1_delay_frames(handle), 3840);
+        assert_eq!(
+            shr_fx_v1_process(handle, input.as_ptr(), output.as_mut_ptr(), 8192),
+            OK
+        );
+        shr_fx_v1_reset(handle);
+        input[16383] = f64::NAN;
+        assert_eq!(
+            shr_fx_v1_process(handle, input.as_ptr(), output.as_mut_ptr(), 8192),
+            INVALID_SAMPLE
+        );
+        input.fill(0.0);
+        assert_eq!(
+            shr_fx_v1_process(handle, input.as_ptr(), output.as_mut_ptr(), 8192),
+            OK
+        );
+        assert!(output.iter().all(|value| *value == 0.0));
+        assert_eq!(
+            shr_fx_v1_process(handle, input.as_ptr(), output.as_mut_ptr(), 8193),
+            CAPACITY
+        );
+    });
+    unsafe { shr_fx_v1_destroy(handle) };
+}
+#[test]
 fn complete_callback_is_allocation_free_through_edits_faults_and_panic() {
     let mut rack = Rack::default();
     for engine in &mut rack.engines {

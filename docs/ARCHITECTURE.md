@@ -1,5 +1,56 @@
 # Ownership and bounded work
 
+## Versioned source-frame adapter
+
+`c_api.rs` and [the C header](../include/shr_fx.h) expose the `shr_fx_v1_*`
+symbols in `libshr_fx.so`. The adapter prepares one fixed stereo Digital Delay
+using the same `Delay` implementation as the rack. It opens no JACK/ALSA ports
+and owns no device, clock, transport, file, thread or dry signal. The host owns
+source epochs, ordered frames, transport admission, wet fades and output timing.
+There are no sibling dependencies or algorithm copies.
+
+The fixed preset is a **20 ms intentional echo**, rounded to the nearest source
+frame, feedback **0.25**, damping **0.35**, wet gain **0.5**, no ping-pong or
+channel crossfeed. Input and output are interleaved L/R. At 48 kHz the first wet
+sample from an impulse at frame 0 is at frame **960**; `delay_frames` reports
+that exact onset. There is no extra adapter block buffering or startup ramp.
+Network/host playout delay and physical converter latency are separate. For
+example an 8 ms return-admission budget does not turn this echo into an 8 ms
+effect. The boundary accepts/returns f64, but the existing effect and state are
+**f32**; conversion happens one stereo pair at a time. This does not establish
+an all-f64 DSP path or improve the precision of source samples.
+
+`create(rate, max_block)` prepares rates 8000–192000 Hz and block bounds
+1–8192 frames, returning null on invalid bounds. Creation and destruction
+allocate/free off the processing thread. Allocation exhaustion follows the
+Rust allocator's process-failure behavior. Process/reset contain no allocation,
+deallocation, locks, I/O, waiting or host-clock reads. Work is bounded by the
+prepared frame limit; reset logically clears fixed ring indices and filters.
+The adapter prepares only one delay's storage, not the complete two-engine rack.
+
+Every handle has one owner. The caller serializes processing, reset and destroy;
+the ABI cannot validate dangling pointers or concurrent use. Valid arrays contain
+`2 * frames` aligned doubles and do not overlap handle storage. Exact in-place
+processing is supported; partial overlap is rejected. `process` returns 0 on
+success, -1 for invalid pointer shape, -2 for excess block capacity, and -3 for
+non-finite input/output or input amplitude above 16. Capacity/pointer errors
+clear history and leave output untouched; sample errors clear history and zero
+the complete valid output block. The host must mute every failed block before
+publication. Finite input is preflighted before advancing any DSP state. A valid
+zero-frame call does not touch audio pointers or state; null audio pointers are
+allowed only then. Null reset/destroy are no-ops; null delay query returns zero.
+
+On a source-frame gap, epoch change or worker restart, the host must reset before
+the next accepted contiguous source block. This discards old tails immediately;
+fresh excitation cannot appear before the declared delay. Reset does not fade,
+so a host must mute/fade wet output when discontinuities occur. Duplicate/stale
+blocks must be rejected by the host before processing: the ABI deliberately
+does not own packet identity or source timestamps. A new sample rate requires
+a new prepared handle. This adapter is independently built; the host chooses
+its local shared-library path outside committed dependency configuration.
+
+## Rack and standalone host
+
 `model.rs` owns versioned scalar rack state, independent input selection and
 finite output layouts. `storage.rs` owns strict JSON decoding, file size limits,
 private physical identities and atomic file replacement. `dsp.rs` has no JACK,

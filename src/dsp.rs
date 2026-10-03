@@ -209,6 +209,52 @@ impl Delay {
         out
     }
 }
+/// Fixed integration preset using the rack's existing digital-delay algorithm.
+/// The first tap is exactly the rounded 20 ms frame count, including at rates
+/// where 20 ms is not an integral number of frames. No additional block delay.
+pub(crate) struct IntegrationDelay {
+    delay: Delay,
+    rate: f32,
+    frames: u32,
+}
+impl IntegrationDelay {
+    pub(crate) fn new(rate: u32) -> Self {
+        let frames = (rate + 25) / 50;
+        let mut delay = Delay::new(rate as f32, 20.0, 0.13);
+        delay.tap = Tap::new(frames as f32, rate as f32);
+        Self {
+            delay,
+            rate: rate as f32,
+            frames,
+        }
+    }
+    pub(crate) fn frames(&self) -> u32 {
+        self.frames
+    }
+    pub(crate) fn clear(&mut self) {
+        self.delay.clear();
+    }
+    pub(crate) fn tick(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.delay
+            .tick(
+                input,
+                self.frames as f32,
+                crate::model::DelayConfig {
+                    kind: DelayKind::Digital,
+                    time_ms: 20.0,
+                    feedback: 0.25,
+                    damping: 0.35,
+                    sync: false,
+                    division: 0,
+                    ping_pong: false,
+                },
+                self.rate,
+                false,
+            )
+            .map(|sample| clean(sample * 0.5))
+    }
+}
+
 struct Comb {
     ring: Ring,
     length: f32,

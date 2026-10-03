@@ -1,3 +1,46 @@
+# Source-frame adapter verification — 2026-10-03
+
+The versioned C ABI reuses the existing Digital Delay with a fixed 20 ms first
+tap, 0.25 feedback, 0.35 damping and 0.5 wet gain. It preserves L/R identity,
+has no dry branch or adapter block delay, and resets tails at the host's source
+discontinuity boundary. At 48 kHz the intentional first tap is frame 960.
+The f64 ABI converts to existing **f32** DSP and state. This is an explicit
+precision limitation against an all-f64 integration target.
+
+Observed offline checks with Rust 1.97.1 on aarch64 Linux:
+
+| Check | Result |
+|---|---|
+| Focused ABI and realtime tests | 10 passed |
+| Complete normal suite, `CARGO_INCREMENTAL=0 cargo test --locked` | 99 passed; 1 historical cost matrix ignored |
+| `cargo fmt --all -- --check` | Passed |
+| `CARGO_INCREMENTAL=0 cargo clippy --locked --all-targets -- -D warnings` | Passed |
+| `CARGO_INCREMENTAL=0 cargo build --release --locked` | Passed |
+| Dynamic release-library ABI smoke with 48-frame blocks | Passed: 960-frame onset, L/R identity, feedback and reset |
+| C header syntax, local Markdown links and whitespace | Passed |
+
+New normal regressions check exact wet onset at 8, 44.1, 48, 96 and 192 kHz,
+plus an 8001 Hz rate requiring frame rounding; independent stereo excitation;
+block partition and in-place equivalence; reset determinism; independent handle
+tails; NaN/infinity/over-range whole-block silence; bounded null, overlap and
+capacity errors; and no process/reset allocation or deallocation at the maximum
+prepared rate/block. The complete normal suite also retains rack routing,
+callback safety, recovery, schema/storage, controller and UI coverage.
+
+The historical ten-case cost matrix was intentionally skipped: its full-rack
+algorithms, capacity and scheduling assumptions did not change. It remains
+available with the opt-in command below. Unchanged renderer generation, terminal
+PTY smokes, auditions and standalone JACK/MIDI hardware tests were also skipped.
+No devices, routes, services or controller settings were changed by this module
+work. GigPies owns integrated host/device/network measurements separately; these
+offline results do not establish physical latency, audio clock accuracy,
+callback deadline margins or listening acceptance.
+
+The release library exports exactly the five documented `shr_fx_v1_*` symbols.
+It retains the crate's native ALSA runtime dependency without opening a device.
+No publication guard or versioned hook configuration exists in this repository;
+the complete staged source/documentation change was reviewed before local commit.
+
 # Performance interface verification — 2026-09-08
 
 Fructal Implement is complete for the local interface/controller scope. This

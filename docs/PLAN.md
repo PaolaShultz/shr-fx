@@ -1,13 +1,23 @@
-# Current handoff — 2026-09-08
+# Current handoff — 2026-10-03
 
-The local v0.3 implementation and documentation are complete for this session.
-The release executable starts offline; there is no unfinished UI/controller
-implementation item carried forward. Actual controller setup, touch usability,
-listening and JACK/thermal/latency acceptance need a separately authorized
-hardware session. They are validation still to perform, not measured results.
+The source-frame integration adapter is implemented around the existing digital
+delay. `libshr_fx.so` exposes the versioned C ABI in `include/shr_fx.h`; the
+fixed stereo wet preset has exactly 20 ms of intentional echo delay (rounded to
+source frames), with no extra adapter buffering. Its f64 boundary uses existing
+f32 DSP internally. Host integration, source epochs, transport and hardware
+measurements belong to GigPies. Module checks and remaining limits are recorded
+in [Acceptance](ACCEPTANCE.md).
+
+The standalone release executable still starts offline. The completed v0.3
+UI/controller design has no unfinished implementation item. Actual controller
+setup, touch usability, listening and standalone JACK/thermal/latency acceptance
+remain separate hardware work. The adapter's offline validation cannot establish
+those results or the integrating host's physical output timing.
 
 ## Delivered behavior
 
+- Device-independent versioned stereo adapter, explicit delay/precision/channel
+  contracts, bounded errors, allocation-free process/reset and source-gap reset.
 - Two independent engines, each with up to eight prepared parallel wet slots:
   Delay, Reverb, Chorus and Harmonic Exciter can share one vocal send and one
   stereo return. All supported input/return combinations remain available.

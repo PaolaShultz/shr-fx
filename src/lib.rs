@@ -1,4 +1,5 @@
 pub mod audio;
+pub mod c_api;
 pub mod dsp;
 mod exciter;
 pub mod midi;
