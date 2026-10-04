@@ -315,6 +315,22 @@ impl IntegrationDelay {
             frames,
         }
     }
+    /// Raw owned allocation spans for ABI output-overlap preflight only.
+    /// Does not expose samples or change the delay algorithm.
+    pub(crate) fn owned_spans(&self) -> [(usize, usize); 6] {
+        let span = |ring: &Ring<f64>| {
+            let start = ring.data.as_ptr() as usize;
+            (start, start + ring.data.capacity() * size_of::<f64>())
+        };
+        [
+            span(&self.delay.rings[0]),
+            span(&self.delay.rings[1]),
+            span(&self.delay.diffusers[0][0].ring),
+            span(&self.delay.diffusers[0][1].ring),
+            span(&self.delay.diffusers[1][0].ring),
+            span(&self.delay.diffusers[1][1].ring),
+        ]
+    }
     pub(crate) fn frames(&self) -> u32 {
         self.frames
     }

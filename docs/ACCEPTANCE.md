@@ -524,3 +524,44 @@ separate; failed loads retain A/B state; controller and touch use the same
 commands; Panic and Exit bypass ordinary queue congestion. Normal and recovery
 software tests provide observed evidence. Physical reach, controller timing and
 musician listening remain unmeasured rather than presumed validated.
+
+## Task0009 FX-01 read-only ABI — 2026-10-04
+
+Additive capability/status queries retain the five existing v1 signatures and
+fixed f64 numerical/error behavior. E07 is the [owner-generated corpus](../tests/fixtures/cfx/v1/README.md),
+with real C header/library consumption. Capability identity is
+`fx-a/fixed-delay-v1`; writable parameters, rack access and hardware health are
+unavailable. Status reports actual process result and history clears, serialized
+with the live handle; it is not an atomic concurrent observer.
+
+Focused C API suite: **7 passed**. Full normal production suite:
+**105 passed, 1 intentionally ignored** (historical cost matrix). New coverage
+includes exact fixed descriptor values/layout, real error/reset history,
+invalid size/version/alignment/span, inline and all six owned-buffer overlap
+rejection without writes, invalid-version refusal before handle access, and
+saturating clear count. Existing wet-only onset, native precision, independent
+stereo, in-place, reset and allocation-free recovery regressions pass.
+Warning-denied all-target Clippy passed. Commands (coordinated workers also
+follow the [shared build-lock policy](https://github.com/PaolaShultz/gigpies/blob/main/docs/PARALLEL_WORK_PLAN.md)):
+
+```sh
+CARGO_INCREMENTAL=0 cargo +1.97.1 test --locked -j1 --test c_api
+CARGO_INCREMENTAL=0 cargo +1.97.1 test --locked -j1 --all-targets
+CARGO_INCREMENTAL=0 cargo +1.97.1 clippy --locked -j1 --all-targets -- -D warnings
+```
+
+Historical sixteen-hall/exhaustive cost matrices, auditions, long soaks, physical
+JACK/ALSA/MIDI, listening and combined-load tests were intentionally skipped:
+no numerical DSP, UI or hardware behavior changed. There are no optional native
+or hardware-host Cargo features in this crate. No physical endpoint was opened;
+old acceptance evidence is preserved. Exact source/header/library hashes and
+build logs belong to the private root-review handoff; root owns publication.
+
+FX-01 final gates also passed: `cargo +1.97.1 fmt --check`,
+`CARGO_INCREMENTAL=0 cargo +1.97.1 build --release --locked -j1 --lib`, and
+C11 `-Wall -Wextra -Werror` compile/link of `sample.c` against the exact release
+library. The actual C run checked all six rates in the corpus, including
+960-frame onset at 48 kHz and fault/reset state; its six output rows matched
+`corpus.json` exactly. No extra adapter buffering was introduced. The disposable
+C executable was removed after retaining its concise output and reproducible
+source/command. Local Markdown links and `git diff --check` passed.

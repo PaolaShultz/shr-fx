@@ -97,3 +97,16 @@ For the next session, follow the hardware acceptance sequence in Acceptance:
 learn the actual controller's messages/encoding, verify touch and controller
 operation, then measure/listen with the existing audio setup if authorized.
 Do not restart the completed UI redesign from the archived plan.
+
+## GigPies integration planning — 2026-10-04
+
+[Owning GigPies plan](GIGPIES_IMPLEMENTATION.md) records scoped tasks, contract dependencies,
+validation and launch instructions. This is planned work; existing implementation
+and hardware status above are unchanged.
+
+## Task0009 FX-01 software continuation
+
+The additive fixed-adapter capability/status seam and owner E07 corpus are ready
+with independent review and the checks recorded in [Acceptance](ACCEPTANCE.md). The
+original adapter signatures and DSP remain unchanged. Writable embedding FX-02/03
+and physical gates remain separate; root owns the central contract and publication.

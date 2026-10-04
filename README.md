@@ -69,6 +69,9 @@ through the shared delay algorithm; the standalone rack retains f32 processing.
 The adapter adds no block buffering. At 48 kHz its intentional first tap
 is exactly 960 source frames. Hosts own discontinuity reset, wet fades and
 source-frame scheduling; see the [ABI contract](docs/ARCHITECTURE.md#versioned-source-frame-adapter).
+Additive read-only queries report the fixed capabilities and actual numerical
+process/reset history in caller-owned structs. Writable rack controls and hardware
+health remain unavailable. See the [owner E07 corpus](tests/fixtures/cfx/v1/README.md).
 Loading this library does not open audio/MIDI devices or start the standalone UI.
 
 ## Documentation

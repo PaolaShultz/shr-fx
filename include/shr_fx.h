@@ -23,6 +23,37 @@ void shr_fx_v1_destroy(void *handle);
  * No adapter block latency. Excludes host/device/network latency. */
 uint32_t shr_fx_v1_delay_frames(void *handle);
 
+/* Additive read-only queries. Use version=1 and EXACT sizeof(output struct).
+ * Invalid version/size/pointer/alignment/span/handle overlap returns -1 without
+ * writing output. Caller guarantees live allocations and exclusive ownership.
+ * Keep the library loaded until all handles are destroyed.
+ * Queries must be serialized with process/reset/destroy; no thread safety.
+ * No allocator ownership crosses this ABI. No hardware health is reported. */
+typedef struct shr_fx_capabilities_v1 {
+    uint32_t version, size;
+    char identity[32]; /* NUL-terminated fx-a/fixed-delay-v1 */
+    uint32_t min_sample_rate, max_sample_rate;
+    uint32_t min_block_frames, max_block_frames;
+    uint32_t channels, sample_bits, reset_supported, writable_parameters;
+    uint32_t rack_available, adapter_buffer_frames;
+    double delay_ms, feedback, damping, wet_gain;
+} shr_fx_capabilities_v1;
+typedef struct shr_fx_status_v1 {
+    uint32_t version, size, sample_rate, max_block_frames;
+    uint32_t intentional_delay_frames, adapter_buffer_frames;
+    int32_t last_process_result; /* last valid-handle process call; initially 0 */
+    uint32_t reset_reason; /* 0 none, 1 explicit, 2 capacity, 3 pointer, 4 sample */
+    uint64_t reset_count; /* saturating history-clear count; initially 0 */
+} shr_fx_status_v1;
+/* Fixed parameters are read-only; embedded rack/writable controls unavailable. */
+int32_t shr_fx_v1_capabilities(shr_fx_capabilities_v1 *output,
+                             uint32_t version, uint32_t size);
+/* Reset preserves last_process_result; successful process replaces it with 0.
+ * reset_reason persists until the next clear. This is history, not a health bit.
+ * Output must not overlap handle storage (including owned delay allocations). */
+int32_t shr_fx_v1_status(void *handle, shr_fx_status_v1 *output,
+                       uint32_t version, uint32_t size);
+
 #ifdef __cplusplus
 }
 #endif

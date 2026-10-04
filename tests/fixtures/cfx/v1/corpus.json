@@ -1,0 +1,52 @@
+{
+  "contract": "C-FX:1/E07",
+  "identity": "fx-a/fixed-delay-v1",
+  "precision": "interleaved stereo f64",
+  "delay_ms": 20,
+  "feedback": 0.25,
+  "damping": 0.35,
+  "wet_gain": 0.5,
+  "adapter_buffer_frames": 0,
+  "reset_supported": true,
+  "writable_parameters": false,
+  "rack_available": false,
+  "rates": [
+    {
+      "sample_rate": 8000,
+      "intentional_delay_frames": 160,
+      "left_first_tap": 0.25000000000045475,
+      "right_first_tap": -0.1250000000001137
+    },
+    {
+      "sample_rate": 8001,
+      "intentional_delay_frames": 160,
+      "left_first_tap": 0.25000000000045475,
+      "right_first_tap": -0.1250000000001137
+    },
+    {
+      "sample_rate": 44100,
+      "intentional_delay_frames": 882,
+      "left_first_tap": 0.25000000000045475,
+      "right_first_tap": -0.1250000000001137
+    },
+    {
+      "sample_rate": 48000,
+      "intentional_delay_frames": 960,
+      "left_first_tap": 0.25000000000045475,
+      "right_first_tap": -0.1250000000001137
+    },
+    {
+      "sample_rate": 96000,
+      "intentional_delay_frames": 1920,
+      "left_first_tap": 0.25000000000045475,
+      "right_first_tap": -0.1250000000001137
+    },
+    {
+      "sample_rate": 192000,
+      "intentional_delay_frames": 3840,
+      "left_first_tap": 0.25000000000045475,
+      "right_first_tap": -0.1250000000001137
+    }
+  ],
+  "limits": "Synthetic software only; no hardware health, scheduler, latency or listening acceptance."
+}

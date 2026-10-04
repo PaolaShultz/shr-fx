@@ -167,3 +167,149 @@ fn invalid_capacity_and_pointer_shape_do_not_write_outside_prepared_bound() {
     assert!(output[..1024].iter().all(|sample| *sample == 0.0));
     assert_eq!(output[1024..], [77.0; 2]);
 }
+
+fn status(fx: &Fx) -> StatusV1 {
+    let mut value = StatusV1::default();
+    assert_eq!(
+        unsafe { shr_fx_v1_status(fx.0, &mut value, 1, size_of::<StatusV1>() as u32) },
+        OK
+    );
+    value
+}
+
+#[test]
+fn queries_report_fixed_capabilities_and_actual_error_reset_history() {
+    let mut caps = CapabilitiesV1::default();
+    assert_eq!(
+        unsafe { shr_fx_v1_capabilities(&mut caps, 1, size_of::<CapabilitiesV1>() as u32) },
+        OK
+    );
+    assert_eq!(size_of::<CapabilitiesV1>(), 112);
+    assert_eq!(size_of::<StatusV1>(), 40);
+    assert_eq!(&caps.identity[..20], b"fx-a/fixed-delay-v1\0");
+    assert_eq!((caps.min_sample_rate, caps.max_sample_rate), (8000, 192000));
+    assert_eq!((caps.min_block_frames, caps.max_block_frames), (1, 8192));
+    assert_eq!(
+        (caps.channels, caps.sample_bits, caps.reset_supported),
+        (2, 64, 1)
+    );
+    assert_eq!(
+        (
+            caps.writable_parameters,
+            caps.rack_available,
+            caps.adapter_buffer_frames
+        ),
+        (0, 0, 0)
+    );
+    assert_eq!(
+        (caps.delay_ms, caps.feedback, caps.damping, caps.wet_gain),
+        (20.0, 0.25, 0.35, 0.5)
+    );
+    let mut fx = Fx::new(48000, 1024);
+    let initial = status(&fx);
+    assert_eq!(
+        (
+            initial.sample_rate,
+            initial.max_block_frames,
+            initial.intentional_delay_frames
+        ),
+        (48000, 1024, 960)
+    );
+    assert_eq!(
+        (
+            initial.last_process_result,
+            initial.reset_reason,
+            initial.reset_count
+        ),
+        (0, 0, 0)
+    );
+    unsafe { shr_fx_v1_reset(fx.0) };
+    assert_eq!((status(&fx).reset_reason, status(&fx).reset_count), (1, 1));
+    assert_eq!(
+        unsafe { shr_fx_v1_process(fx.0, ptr::null(), ptr::null_mut(), 1025) },
+        CAPACITY
+    );
+    assert_eq!(
+        (
+            status(&fx).last_process_result,
+            status(&fx).reset_reason,
+            status(&fx).reset_count
+        ),
+        (-2, 2, 2)
+    );
+    assert_eq!(
+        unsafe { shr_fx_v1_process(fx.0, ptr::null(), ptr::null_mut(), 1) },
+        INVALID_ARGUMENT
+    );
+    assert_eq!(
+        (
+            status(&fx).last_process_result,
+            status(&fx).reset_reason,
+            status(&fx).reset_count
+        ),
+        (-1, 3, 3)
+    );
+    assert_eq!(fx.process(&[f64::NAN, 0.0], &mut [99.0; 2]), INVALID_SAMPLE);
+    unsafe { shr_fx_v1_reset(fx.0) };
+    assert_eq!(
+        (
+            status(&fx).last_process_result,
+            status(&fx).reset_reason,
+            status(&fx).reset_count
+        ),
+        (-3, 1, 5)
+    );
+    assert_eq!(fx.process(&[0.0; 2], &mut [99.0; 2]), OK);
+    assert_eq!(
+        (
+            status(&fx).last_process_result,
+            status(&fx).reset_reason,
+            status(&fx).reset_count
+        ),
+        (0, 1, 5)
+    );
+}
+
+#[test]
+fn invalid_queries_leave_storage_and_dsp_exact() {
+    let fx = Fx::new(48000, 1024);
+    let before = status(&fx);
+    let mut output = before;
+    let mut caps = CapabilitiesV1::default();
+    let cap_before = caps;
+    unsafe {
+        for (version, size) in [(0, 40), (2, 40), (1, 39), (1, 41), (1, u32::MAX)] {
+            assert_eq!(
+                shr_fx_v1_status(fx.0, &mut output, version, size),
+                INVALID_ARGUMENT
+            );
+            assert_eq!(output, before);
+        }
+        assert_eq!(
+            shr_fx_v1_status(8usize as *mut c_void, &mut output, 2, 40),
+            INVALID_ARGUMENT
+        );
+        assert_eq!(
+            shr_fx_v1_status(ptr::null_mut(), &mut output, 1, 40),
+            INVALID_ARGUMENT
+        );
+        assert_eq!(
+            shr_fx_v1_status(fx.0, ptr::null_mut(), 1, 40),
+            INVALID_ARGUMENT
+        );
+        assert_eq!(shr_fx_v1_status(fx.0, fx.0.cast(), 1, 40), INVALID_ARGUMENT);
+        let mut bytes = [0u64; 16];
+        let bad = bytes.as_mut_ptr().cast::<u8>().add(1);
+        assert_eq!(shr_fx_v1_status(fx.0, bad.cast(), 1, 40), INVALID_ARGUMENT);
+        assert_eq!(shr_fx_v1_capabilities(bad.cast(), 1, 112), INVALID_ARGUMENT);
+        assert_eq!(bytes, [0; 16]);
+        assert_eq!(
+            shr_fx_v1_status(fx.0, (usize::MAX - 7) as *mut StatusV1, 1, 40),
+            INVALID_ARGUMENT
+        );
+        assert_eq!(shr_fx_v1_capabilities(&mut caps, 2, 112), INVALID_ARGUMENT);
+        assert_eq!(shr_fx_v1_capabilities(&mut caps, 1, 111), INVALID_ARGUMENT);
+        assert_eq!(caps, cap_before);
+    }
+    assert_eq!(status(&fx), before);
+}
