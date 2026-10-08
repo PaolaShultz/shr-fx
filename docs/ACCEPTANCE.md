@@ -565,3 +565,51 @@ library. The actual C run checked all six rates in the corpus, including
 `corpus.json` exactly. No extra adapter buffering was introduced. The disposable
 C executable was removed after retaining its concise output and reproducible
 source/command. Local Markdown links and `git diff --check` passed.
+
+## Task0020 C1 prepared wet-delay v2 — 2026-10-08
+
+Pi4 (`rpi4`), aarch64 Linux, exact Rust 1.97.1/Cargo.lock. This is a synthetic
+memory/owned-CLI software increment with a coordinator-reviewed additive header.
+The standalone rack UI/schema and all v1 fixture bytes remain unchanged.
+The owner [v2 corpus](../tests/fixtures/cfx/v2/README.md) pins the supplying
+header/library and actual C size/offset, success, error and status rows.
+
+Focused owner tests cover independent fractional onset and f64 samples/coefficients,
+rate/block/delay/resource bounds, exact read-head/gain/excitation transitions,
+bypass/tails, selected panic, partner-history preservation, stale/busy/timeline
+refusal, source-counter overflow, prepare/retire lifetime, in-place processing,
+all owned allocation spans and recovery. The allocator probe exercises commit,
+render, capabilities/status, panic/reset, refusal and faults with zero allocation
+or deallocation in the tracked callback scope. Ring storage at maximum rate is
+1,536,064 bytes; fixed handle metadata is 632 bytes and each prepared token 112
+bytes on this target. No second algorithm bank or transition overlap is admitted.
+
+C11 `-Wall -Wextra -Werror` compile/link and actual runs passed against the release
+library for both v1 and v2. All six original v1 numerical/error rows match, and
+its fixture files are byte-identical to the base revision. The v2 C caller checks
+bounded settlement and the distinction between panic and permanent mute, including
+near-counter-limit transition refusal. Warning-denied all-target Clippy and the
+locked release build passed. The full normal all-target suite passed **121 tests,
+zero failures, one intentionally ignored** historical cost matrix. Final formatting,
+Python/PTY and document/publication checks are retained with the private handoff.
+All six offline release PTY cases passed (touch, MultiFX, Exciter, controller,
+keyboard and SIGTERM), restoring terminal modes and writing no user state.
+Six Python publication-checker tests passed. The explicit allocator witness
+reported **1,536,696 total allocated bytes** for maximum-rate creation (rings
+plus handle); render/commit/query/reset/panic/fault calls allocated/freed zero.
+No visible renderer changed, so generated gallery/font/palette were preserved.
+
+The initial cold build failed because Pi4 lacked JACK development pkg-config
+metadata. Matching Debian libjack-jackd2-dev 1.9.22~dfsg-4 was extracted into
+ignored task-private artifacts, with its linker metadata pointing to the existing
+JACK runtime. No package was installed and no service/device changed. An early
+identity-length test assertion and a Clippy test-pointer warning were corrected;
+the failed gate logs are preserved alongside passing reruns in private evidence.
+
+All Cargo gates use the parent nonblocking shared build lock, jobs 1,
+`CARGO_INCREMENTAL=0` and the normal FX target cache. Commands, durations,
+input manifests, environment and log hashes remain in the private task handoff.
+Historical exhaustive cost/audition/soak matrices, physical I/O, network/load,
+recording, display takeover, services and publication/deployment are outside
+this software acceptance. No listening, JACK deadline, physical path latency,
+thermal headroom or complete embedded rack acceptance is implied.

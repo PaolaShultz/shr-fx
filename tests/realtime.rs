@@ -205,3 +205,68 @@ fn maximum_rate_preparation_stays_within_documented_dsp_budget() {
     );
     drop(processor);
 }
+
+#[test]
+fn prepared_v2_commit_render_queries_reset_panic_faults_are_allocation_free() {
+    use shr_fx::{c_api::*, c_api_v2::*};
+    use std::ptr;
+    let mut bytes = 0;
+    BYTES.with(|c| c.set(0));
+    TRACK.with(|c| c.set(true));
+    let handle = shr_fx_v2_create(192000, 8192);
+    TRACK.with(|c| c.set(false));
+    BYTES.with(|c| bytes = c.get());
+    assert!(!handle.is_null());
+    println!("v2 maximum-rate total allocated bytes: {bytes}");
+    assert!(
+        (1536064..1539000).contains(&bytes),
+        "v2 prepared bytes {bytes}"
+    );
+    let mut config = ConfigV2 {
+        version: 2,
+        size: size_of::<ConfigV2>() as u32,
+        expected_generation: 0,
+        generation: 1,
+        channel: [ChannelV2::default(); 2],
+    };
+    config.channel[0].delay_ms = 1.0;
+    config.channel[1].bypass = 1;
+    let token = unsafe { shr_fx_v2_prepare(&config, 192000, 2, 104) };
+    assert!(!token.is_null());
+    let mut input = vec![0.5 + 2f64.powi(-40); 16384];
+    let mut output = vec![0.0; 16384];
+    let mut s = StatusV2::default();
+    let mut caps = CapabilitiesV2::default();
+    tracked(|| unsafe {
+        assert_eq!(shr_fx_v2_commit(handle, token, 0), OK);
+        assert_eq!(shr_fx_v2_status(handle, &mut s, 2, 168), OK);
+        assert_eq!(shr_fx_v2_capabilities(&mut caps, 2, 128), OK);
+        assert_eq!(shr_fx_v2_commit(handle, token, 0), STALE);
+        assert_eq!(
+            shr_fx_v2_process(handle, input.as_ptr(), output.as_mut_ptr(), 8192, 0),
+            OK
+        );
+        assert_eq!(shr_fx_v2_panic(handle, 1), OK);
+        assert_eq!(shr_fx_v2_reset(handle, 8192), OK);
+        input[16383] = f64::NAN;
+        assert_eq!(
+            shr_fx_v2_process(handle, input.as_ptr(), output.as_mut_ptr(), 8192, 8192),
+            INVALID_SAMPLE
+        );
+        assert_eq!(
+            shr_fx_v2_process(handle, ptr::null(), ptr::null_mut(), 8193, 8192),
+            CAPACITY
+        );
+        input.fill(0.0);
+        assert_eq!(
+            shr_fx_v2_process(handle, input.as_ptr(), output.as_mut_ptr(), 8192, 8192),
+            OK
+        );
+        assert!(output.iter().all(|x| *x == 0.0));
+    });
+    // Only the control owner retires/frees either object, after all render calls.
+    unsafe {
+        shr_fx_v2_retire(token);
+        shr_fx_v2_destroy(handle)
+    };
+}

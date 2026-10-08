@@ -282,7 +282,7 @@ impl<S: DelaySample> Delay<S> {
             config.damping
         };
         for (c, sample) in main.into_iter().enumerate() {
-            self.low[c] = clean(self.low[c] * damping + sample * (S::ONE - damping));
+            self.low[c] = digital_damping(self.low[c], sample, damping);
         }
         for (c, sample) in input.into_iter().enumerate() {
             let value =
@@ -352,6 +352,148 @@ impl IntegrationDelay {
                 false,
             )
             .map(|sample| clean(sample * 0.5))
+    }
+}
+
+/// The owner digital-delay feedback filter, shared by rack/v1 and prepared v2.
+fn digital_damping<S: DelaySample>(low: S, sample: S, damping: S) -> S {
+    clean(low * damping + sample * (S::ONE - damping))
+}
+
+/// Minimal prepared digital wet-delay controls; no standalone schema changes.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WetDelayControls {
+    pub delay_ms: f64,
+    pub feedback: f64,
+    pub damping: f64,
+    pub wet_gain: f64,
+    pub bypass: u32,
+    pub reserved: u32,
+}
+impl Default for WetDelayControls {
+    fn default() -> Self {
+        Self {
+            delay_ms: 20.0,
+            feedback: 0.25,
+            damping: 0.35,
+            wet_gain: 0.5,
+            bypass: 0,
+            reserved: 0,
+        }
+    }
+}
+impl WetDelayControls {
+    pub(crate) fn valid(self) -> bool {
+        self.delay_ms.is_finite()
+            && (1.0..=500.0).contains(&self.delay_ms)
+            && self.feedback.is_finite()
+            && (0.0..=0.85).contains(&self.feedback)
+            && self.damping.is_finite()
+            && (0.0..=0.99).contains(&self.damping)
+            && self.wet_gain.is_finite()
+            && (0.0..=1.0).contains(&self.wet_gain)
+            && self.bypass <= 1
+            && self.reserved == 0
+    }
+}
+
+/// Independently prepared mono channel of the owner digital delay. Reuses the
+/// same f64 Ring, Tap interpolation and feedback recurrence as the standalone
+/// digital algorithm. One ring, at most two read heads; no extra algorithm bank.
+pub(crate) struct PreparedWetChannel {
+    ring: Ring<f64>,
+    tap: Tap<f64>,
+    low: f64,
+    current: WetDelayControls,
+    start: WetDelayControls,
+    target: WetDelayControls,
+    excitation: f64,
+    start_excitation: f64,
+    remaining: u32,
+    transition_frames: u32,
+    rate: f64,
+}
+impl PreparedWetChannel {
+    pub(crate) fn new(rate: u32) -> Self {
+        let controls = WetDelayControls::default();
+        Self {
+            ring: Ring::new((rate / 2) as usize + 4),
+            tap: Tap::new(rate as f64 * 0.02, rate as f64),
+            low: 0.0,
+            current: controls,
+            start: controls,
+            target: controls,
+            excitation: 1.0,
+            start_excitation: 1.0,
+            remaining: 0,
+            transition_frames: rate.div_ceil(50),
+            rate: rate as f64,
+        }
+    }
+    pub(crate) fn owned_span(&self) -> (usize, usize) {
+        let start = self.ring.data.as_ptr() as usize;
+        (start, start + self.ring.data.capacity() * size_of::<f64>())
+    }
+    pub(crate) fn remaining(&self) -> u32 {
+        self.remaining
+    }
+    pub(crate) fn apply(&mut self, controls: WetDelayControls) {
+        if controls == self.target {
+            return;
+        }
+        self.start = self.current;
+        self.start_excitation = self.excitation;
+        self.target = controls;
+        self.tap.from = self.tap.to;
+        self.tap.to = controls.delay_ms * self.rate / 1000.0;
+        self.remaining = self.transition_frames;
+    }
+    pub(crate) fn clear(&mut self) {
+        self.ring.clear();
+        self.low = 0.0;
+    }
+    /// A source discontinuity may snap accepted controls while the host is muted.
+    pub(crate) fn settle(&mut self) {
+        self.current = self.target;
+        self.excitation = if self.target.bypass == 0 { 1.0 } else { 0.0 };
+        self.remaining = 0;
+        self.tap.from = self.tap.to;
+        self.tap.phase = 1.0;
+    }
+    pub(crate) fn tick(&mut self, input: f64) -> f64 {
+        if self.remaining != 0 {
+            self.remaining -= 1;
+            let phase =
+                (self.transition_frames - self.remaining) as f64 / self.transition_frames as f64;
+            let ramp = |a: f64, b: f64| {
+                if self.remaining == 0 {
+                    b
+                } else {
+                    a + (b - a) * phase
+                }
+            };
+            self.current.feedback = ramp(self.start.feedback, self.target.feedback);
+            self.current.damping = ramp(self.start.damping, self.target.damping);
+            self.current.wet_gain = ramp(self.start.wet_gain, self.target.wet_gain);
+            self.excitation = ramp(
+                self.start_excitation,
+                if self.target.bypass == 0 { 1.0 } else { 0.0 },
+            );
+            self.tap.phase = if self.tap.from == self.tap.to {
+                1.0
+            } else {
+                phase
+            };
+            if self.remaining == 0 {
+                self.settle();
+            }
+        }
+        let wet = self.tap.read(&self.ring);
+        self.low = digital_damping(self.low, wet, self.current.damping);
+        self.ring
+            .push(input * self.excitation + self.low * self.current.feedback);
+        clean(wet * self.current.wet_gain)
     }
 }
 

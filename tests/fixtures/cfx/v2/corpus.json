@@ -1,0 +1,47 @@
+{
+  "contract": "C-FX:2/task0020-C1",
+  "identity": "fx-a/prepared-delay-v2",
+  "abi_version": 2,
+  "base_revision": "5f775e01e6dea3c6fe611745619dc6f4bb91299c",
+  "header_sha256": "80286359fed59eb0ecf757fea75ab59b17a958a2234a0921cde9a798ff4c114b",
+  "library_sha256": "dae6d542797f5e65d542691e5db7962460711ac6025d037203cc7a88770ec0d0",
+  "caller_sha256": "3d91bdae08485220b84bd3e27e759870b32bbe7ee1bcf33e3c48a21316e39c04",
+  "precision": "independent interleaved stereo f64",
+  "layout_bytes": {
+    "channel": 40,
+    "config": 104,
+    "capabilities": 128,
+    "status": 168
+  },
+  "actual_c_rows": [
+    {
+      "event": "caps",
+      "bytes": 1536064,
+      "channels": 2
+    },
+    {
+      "event": "impulse",
+      "left_onset": 48,
+      "left_bits": "3fe0000000002000",
+      "right_onset": 960,
+      "right_bits": "bfc0000000001000"
+    },
+    {
+      "event": "errors_status",
+      "busy": -5,
+      "timeline": -6,
+      "stale": -4,
+      "sample": -3,
+      "applied": 3,
+      "settled": 3,
+      "next_frame": 7000,
+      "resets": 3
+    },
+    {
+      "event": "transition_overflow",
+      "changed_result": -6,
+      "no_change_settled": 4
+    }
+  ],
+  "limits": "Owner-generated device-free C run at 48kHz, with header size/offset and behavioral assertions. No hardware, scheduler, path-latency or listening acceptance. V1 fixtures unchanged."
+}

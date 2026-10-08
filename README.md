@@ -71,7 +71,17 @@ is exactly 960 source frames. Hosts own discontinuity reset, wet fades and
 source-frame scheduling; see the [ABI contract](docs/ARCHITECTURE.md#versioned-source-frame-adapter).
 Additive read-only queries report the fixed capabilities and actual numerical
 process/reset history in caller-owned structs. Writable rack controls and hardware
-health remain unavailable. See the [owner E07 corpus](tests/fixtures/cfx/v1/README.md).
+health remain unavailable through v1. See the [owner E07 corpus](tests/fixtures/cfx/v1/README.md).
+
+The additive **v2 prepared stereo delay** exposes independent L/R delay time
+(1–500 ms), feedback, damping, return gain and wet bypass, plus selected-channel
+panic. It retains f64 owner DSP and bounded 20 ms control/read-head transitions;
+applied and settled generations are distinct from audible tail silence.
+This is one stereo delay instance, without embedded A/B rack controls.
+See the [prepared ABI contract](docs/ARCHITECTURE.md#prepared-stereo-wet-delay-v2)
+and [owner v2 C caller/corpus](tests/fixtures/cfx/v2/README.md). Hosts prepare and
+retire tokens off render, serialize all handle calls and retain the v1 fixed
+read-only fallback when the complete v2 symbol set is unavailable.
 Loading this library does not open audio/MIDI devices or start the standalone UI.
 
 ## Documentation

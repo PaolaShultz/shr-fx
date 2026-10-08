@@ -98,15 +98,21 @@ learn the actual controller's messages/encoding, verify touch and controller
 operation, then measure/listen with the existing audio setup if authorized.
 Do not restart the completed UI redesign from the archived plan.
 
-## GigPies integration planning — 2026-10-04
+## GigPies integration — 2026-10-08
 
-[Owning GigPies plan](GIGPIES_IMPLEMENTATION.md) records scoped tasks, contract dependencies,
-validation and launch instructions. This is planned work; existing implementation
-and hardware status above are unchanged.
+The [owning integration plan](GIGPIES_IMPLEMENTATION.md) and
+[prepared ABI contract](ARCHITECTURE.md#prepared-stereo-wet-delay-v2) now describe
+an additive f64 stereo digital-delay v2. Independent channel controls, bounded
+prepare/commit/retire, applied/settled generations, source-frame refusal, wet
+bypass/tails and selected panic are implemented. The fixed v1 adapter and
+[original E07 corpus](../tests/fixtures/cfx/v1/README.md) remain compatible.
+Software check results belong to [Acceptance](ACCEPTANCE.md); exact build and
+contract identities are retained with the [v2 owner corpus](../tests/fixtures/cfx/v2/README.md).
 
-## Task0009 FX-01 software continuation
-
-The additive fixed-adapter capability/status seam and owner E07 corpus are ready
-with independent review and the checks recorded in [Acceptance](ACCEPTANCE.md). The
-original adapter signatures and DSP remain unchanged. Writable embedding FX-02/03
-and physical gates remain separate; root owns the central contract and publication.
+Next owner/action: GigPies independently reviews this owner package and implements
+source-indexed return composition and old-library fallback; Desk consumes that
+provider for explicit controls. No standalone UI/schema change or complete A/B
+rack embedding is part of this increment. Further palettes/rack widening need a
+separate complete owner task and measured resource admission. Physical listening,
+JACK scheduling, latency and controller acceptance still require the separately
+authorized session described in Acceptance.

@@ -235,3 +235,13 @@ Recorded on 2026-09-07 with Rust 1.97.1, aarch64 Linux:
 
 Live JACK/ALSA integration, audible auditions, path latency, xruns, thermal
 headroom, recordings and service changes were intentionally not exercised.
+
+## Embedded FX design-only checkpoint superseded — 2026-10-08
+
+The 2026-10-04 FX-01-only launch prompt and FX-02 design-only fallback in
+GIGPIES_IMPLEMENTATION were superseded by the operator-authorized task0020 C1
+package. FX-01 fixed v1 remains compatible; the accepted FX-02 layout now supports
+FX-03 as one prepared f64 stereo digital delay. The current plan and Architecture
+own v2 controls/lifetimes/resource limits, and consumers retain the fixed v1
+fallback for old libraries. The previous plan did not grant physical activation
+or imply a complete embedded standalone rack; neither does this increment.
