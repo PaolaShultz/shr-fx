@@ -565,3 +565,45 @@ library. The actual C run checked all six rates in the corpus, including
 `corpus.json` exactly. No extra adapter buffering was introduced. The disposable
 C executable was removed after retaining its concise output and reproducible
 source/command. Local Markdown links and `git diff --check` passed.
+
+## 2026-10-09 — FX-02/FX-03 offline prepared embedding
+
+Additive v2 exposes writable native f64 Digital Delay, existing Room and
+single-voice chorus through one typed settings contract. Fixed v1 source,
+symbols/layouts and exact sample corpus are retained. Standalone f32 algorithms
+use the same generic primitives; storage/controller/routing/UI remain intact.
+Architecture and `include/shr_fx.h` own the reviewed lifetime/resource contract.
+
+Verified **113 passed, 2 intentionally ignored** in the full normal suite.
+The new offline aggregate embedding cost matrix and historical standalone soak
+remain opt-in. Real C v2 caller verifies layouts, parameter descriptors, wet
+onsets/feedback, independent Room first-comb/allpass amplitude, chorus delay,
+accepted/applied settings, stale/duplicate refusal, cancel/retire/reset, faults
+and destruction with pending state. The retained C v1 caller checks all six
+rates and exact sub-f32 sample detail. Rust additionally checks independently
+computed modulated fractional taps, block partitioning, instance isolation,
+input amplitude 16, interrupted transitions, backpressure and bypass tails.
+Allocation instrumentation covers maximum-rate preparation bounds and zero
+allocation/deallocation during publication, rendering, structural transitions,
+reset, sample faults and ownership retirement. All-target warning-denied Clippy,
+formatting, local documentation links and whitespace checks pass.
+
+Reproduce without opening endpoints:
+
+```sh
+cargo test --locked -j 2
+cargo clippy --locked -j 2 --all-targets -- -D warnings
+cargo fmt --check
+scripts/check_c_api_v2.sh
+# Optional regular-thread aggregate cost evidence, not target admission:
+cargo test --release --locked -j 2 --test embedding_cost -- --ignored --nocapture
+```
+
+This machine has `libjack.so.0` but lacks `jack.pc`. These runs used disposable
+pkg-config metadata in `/tmp/shr-fx-build-pc` (Name jack, Version 1.9.22,
+Libs `-l:libjack.so.0`) via `PKG_CONFIG_PATH`; no package, service or audio
+configuration changed. C checks use the freshly built debug shared library.
+No live audio, hardware, deployment, audition, thermal/xrun measurements or
+combined module testing ran. A target-specific aggregate 48 kHz/48-frame budget
+is still required before live readiness; capabilities report that evidence
+unavailable. GigPies/Desk own their consumer adapters. No sibling was modified.

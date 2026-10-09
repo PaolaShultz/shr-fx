@@ -205,3 +205,53 @@ fn maximum_rate_preparation_stays_within_documented_dsp_budget() {
     );
     drop(processor);
 }
+
+#[test]
+fn writable_embedding_publication_transition_reset_and_retirement_are_allocation_free() {
+    use shr_fx::c_api_v2::*;
+    for algorithm in [1, 2, 3] {
+        let mut s = Settings::default();
+        unsafe {
+            assert_eq!(
+                shr_fx_v2_defaults(algorithm, &mut s, 2, size_of::<Settings>() as u32),
+                0
+            );
+            BYTES.with(|c| c.set(0));
+            TRACK.with(|c| c.set(true));
+            let h = shr_fx_v2_create(192000, 8192, &s);
+            let mut target = s;
+            target.gain = 0.25;
+            let p = shr_fx_v2_prepare(192000, 8192, &target);
+            TRACK.with(|c| c.set(false));
+            assert!(BYTES.with(Cell::get) < 16 * 1024 * 1024);
+            let input = [0.5; 16384];
+            let mut out = [0.0; 16384];
+            let mut retired = std::ptr::null_mut();
+            tracked(|| {
+                assert_eq!(shr_fx_v2_publish(h, p, 1, 0), 0);
+                assert_eq!(
+                    shr_fx_v2_process(h, input.as_ptr(), out.as_mut_ptr(), 8192),
+                    0
+                );
+                retired = shr_fx_v2_retire(h);
+                assert!(!retired.is_null());
+                assert_eq!(shr_fx_v2_reset(h), 0);
+                assert_eq!(
+                    shr_fx_v2_process(h, [f64::NAN, 0.0].as_ptr(), out.as_mut_ptr(), 1),
+                    -3
+                );
+                assert_eq!(shr_fx_v2_reset(h), 0);
+            });
+            shr_fx_v2_cancel(retired);
+            // Reset with a pending edit must relinquish without destruction.
+            let p = shr_fx_v2_prepare(192000, 8192, &s);
+            tracked(|| {
+                assert_eq!(shr_fx_v2_publish(h, p, 2, 1), 0);
+                assert_eq!(shr_fx_v2_reset(h), 0);
+                retired = shr_fx_v2_retire(h);
+            });
+            shr_fx_v2_cancel(retired);
+            shr_fx_v2_destroy(h);
+        }
+    }
+}

@@ -260,3 +260,81 @@ branch, and suppression of two selected folded harmonics versus direct shaping.
 The general aliasing/oversampling rationale is discussed in [Parker et al.,
 DAFx 2016](https://dafx.de/paper-archive/2016/dafxpapers/20-DAFx-16_paper_41-PN.pdf);
 this implementation uses FIR oversampling, not that paper's ADAA algorithm.
+
+## Writable embedding v2 contract (2026-10-09)
+
+V2 is additive; v1 symbols, layouts and fixed samples remain unchanged. One
+single owner serializes every operation on an instance, including queries.
+Preparation may run elsewhere using copied settings; publishing requires the
+processing owner at a block boundary. There are no internal threads or clocks.
+All pointer arguments require live aligned allocations and disjoint storage;
+exact audio in-place is allowed, partial overlap is refused. Objects and their
+owned buffers must never overlap caller storage. Keep the library loaded until
+all objects are destroyed. Invalid pointers cannot be made memory-safe by C.
+
+Stable IDs: 1 digital delay, 2 Room reverb, 3 single-voice chorus. Settings use
+exact version=2 and sizeof, fixed-width fields, native double parameters.
+Time is milliseconds (delay 1..2000, Room predelay 0..200, chorus base 1..30).
+Amount is delay feedback 0..0.9, Room decay 0..0.9, chorus depth 0..9 ms;
+chorus base-depth must be >=1 and base+depth <=39. Damping is 0..1 for
+delay/Room and must be zero for chorus. Rate Hz is 0.05..10 for chorus and
+zero otherwise. Gain is 0..1; bypass is 0/1; reserved is zero. Defaults:
+delay 20/.25/.35, Room 0/.5/.35, chorus 12/3/0 at .5 Hz, gain .5.
+All numeric values must be finite. Unsupported fields/IDs are refused intact.
+GigPies resolves tempo divisions into milliseconds; FX advances on source frames.
+Intentional time excludes all buffering/device/transport delay (no adapter delay).
+
+Rates 8000..192000; blocks 1..8192 frames, stereo interleaved doubles, input
+absolute bound 16. Output fault bound 256. Values above unity are supported.
+Zero-frame process permits null audio and performs no transition. Capacity or
+pointer errors write nothing; sample faults silence the whole valid block,
+clear this instance only and latch fault until reset. Reset clears tails,
+restarts deterministic modulation and cancels a pending transition into the
+retired slot. Source gaps/epoch changes require reset; rate changes require a
+fresh prepared instance. Bypass stops excitation but drains unmeasured tails.
+Reset/panic discards tails; structural replacement discards the old tail after
+fade-out. Neither bypass nor any fault passes dry input.
+
+Create and prepare allocate off-thread. Allocation exhaustion follows Rust's
+process-abort allocator policy; validation failures return null without active
+changes. ABI panics are contained and reported as -7 (create/prepare null).
+Return codes: 0 success, -1 malformed argument, -2 capacity/backpressure,
+-3 sample fault, -4 stale revision, -5 duplicate/out-of-order request,
+-6 invalid settings, -7 panic. Only successful publication transfers the
+prepared object. Failure leaves it caller-owned; cancel/destroy it off-thread.
+One pending and one retired object bound work and memory. Retire returns ownership
+only after DSP relinquishes it; destruction is always off-thread. Shutdown
+requires quiescence; destroy frees active, pending and retired objects.
+
+Bypass-only edits apply at the next nonempty block boundary, preserving active
+tails and retiring the unused prepared object. Other edits use bounded fade-out/swap/fade-in, 10 ms each side, with no simultaneous
+DSP overlap. This deliberately conservative replacement also handles continuous
+changes click-free. Target changes upon acceptance; current/revision changes at
+swap; applied request changes only after fade-in. Old/new state memory is admitted
+up to three prepared effects per instance, each below 8 MiB; host limits aggregate
+instance count and cost. No hardware-ready instance count is claimed. History is
+one last accepted request, one last request/result/state plus current/applied
+revisions. Refusal remains correlated even if an earlier accepted edit finishes. IDs strictly increase;
+retries are refused as duplicates, stale base revisions are refused. Query reports
+current/target settings, pending/transition, latched DSP fault and last result,
+never hardware health. Host must mute any failed block, including panic failure;
+pointer/capacity/panic errors cannot promise writable output. No settings file format or device assignments enter v2.
+Processing, publication, query and reset allocate/free nothing, lock nothing,
+and perform bounded work. Reclamation requires an off-thread retire/destroy pass.
+Target-specific aggregate CPU/deadline/thermal/listening acceptance remains gated.
+
+Maximum work per source frame is one effect tick: delay two ring reads/writes
+plus bounded diffuser storage, Room two predelay taps/eight combs/four output
+allpasses, chorus one voice/two fractional taps. Reset invalidates ring history
+without clearing sample allocations. Transition runs one effect, never two;
+retire removes at most one object per call. Capabilities parameter descriptors
+advertise exact supported scalar units/defaults/ranges; validate additionally
+checks joint chorus bounds. Hardware instance admission is unavailable, not zero
+usable instances; the host owns aggregate admission until measured acceptance.
+
+`intentional_delay_frames` reports rounded configured delay time, Room predelay,
+or chorus base delay, respectively. Room onset also includes its comb network;
+chorus instantaneous taps vary with deterministic modulation. No field claims
+measured latency or silence. `last_result` is the latest process/publish result;
+`last_request`/`request_result`/`request_state` retain the latest publication
+outcome independently, while accepted/applied IDs track DSP progress.

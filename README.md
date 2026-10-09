@@ -63,15 +63,22 @@ network, launcher SDK or sibling repository are required.
 
 The same release build produces `target/release/libshr_fx.so`, with the
 [versioned C interface](include/shr_fx.h) for a device-independent stereo wet
-return. It reuses the rack's Digital Delay as a fixed 20 ms echo with 0.25
+return. The preserved v1 interface reuses the rack's Digital Delay as a fixed 20 ms echo with 0.25
 feedback and 0.5 wet gain. The adapter uses native **f64** DSP and retained state
 through the shared delay algorithm; the standalone rack retains f32 processing.
 The adapter adds no block buffering. At 48 kHz its intentional first tap
 is exactly 960 source frames. Hosts own discontinuity reset, wet fades and
 source-frame scheduling; see the [ABI contract](docs/ARCHITECTURE.md#versioned-source-frame-adapter).
 Additive read-only queries report the fixed capabilities and actual numerical
-process/reset history in caller-owned structs. Writable rack controls and hardware
+process/reset history in caller-owned structs. V1 writable rack controls and hardware
 health remain unavailable. See the [owner E07 corpus](tests/fixtures/cfx/v1/README.md).
+V2 adds prepared writable Digital Delay, Room reverb and single-voice chorus,
+with native f64 state, typed parameter descriptors, current/target/revision
+readback and bounded fade-out/swap/fade-in replacement. Bypass-only edits keep
+tails. Prepare and reclaim off-thread; serialize publish/process/query/reset
+under one instance owner. See the [v2 contract](docs/ARCHITECTURE.md#writable-embedding-v2-contract-2026-10-09).
+Run `scripts/check_c_api_v2.sh` for real C wet-output and lifetime verification.
+Aggregate target hardware admission remains unqualified.
 Loading this library does not open audio/MIDI devices or start the standalone UI.
 
 ## Documentation
