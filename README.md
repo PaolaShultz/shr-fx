@@ -63,7 +63,7 @@ network, launcher SDK or sibling repository are required.
 
 The same release build produces `target/release/libshr_fx.so`, with the
 [versioned C interface](include/shr_fx.h) for a device-independent stereo wet
-return. It reuses the rack's Digital Delay as a fixed 20 ms echo with 0.25
+return. The preserved v1 interface reuses the rack's Digital Delay as a fixed 20 ms echo with 0.25
 feedback and 0.5 wet gain. The adapter uses native **f64** DSP and retained state
 through the shared delay algorithm; the standalone rack retains f32 processing.
 The adapter adds no block buffering. At 48 kHz its intentional first tap
@@ -73,15 +73,23 @@ Additive read-only queries report the fixed capabilities and actual numerical
 process/reset history in caller-owned structs. Writable rack controls and hardware
 health remain unavailable through v1. See the [owner E07 corpus](tests/fixtures/cfx/v1/README.md).
 
-The additive **v2 prepared stereo delay** exposes independent L/R delay time
+The additive **source-timeline delay v2** (`shr_fx_delay_v2_*`) exposes independent L/R delay time
 (1–500 ms), feedback, damping, return gain and wet bypass, plus selected-channel
 panic. It retains f64 owner DSP and bounded 20 ms control/read-head transitions;
 applied and settled generations are distinct from audible tail silence.
 This is one stereo delay instance, without embedded A/B rack controls.
 See the [prepared ABI contract](docs/ARCHITECTURE.md#prepared-stereo-wet-delay-v2)
-and [owner v2 C caller/corpus](tests/fixtures/cfx/v2/README.md). Hosts prepare and
+and [owner delay v2 C caller](tests/fixtures/cfx/delay-v2/README.md). Hosts prepare and
 retire tokens off render, serialize all handle calls and retain the v1 fixed
-read-only fallback when the complete v2 symbol set is unavailable.
+read-only fallback when the complete delay-v2 symbol set is unavailable.
+
+The separate published `shr_fx_v2_*` ABI adds prepared writable Digital Delay, Room reverb and single-voice chorus,
+with native f64 state, typed parameter descriptors, current/target/revision
+readback and bounded fade-out/swap/fade-in replacement. Bypass-only edits keep
+tails. Prepare and reclaim off-thread; serialize publish/process/query/reset
+under one instance owner. See the [v2 contract](docs/ARCHITECTURE.md#writable-embedding-v2-contract-2026-10-09).
+Run `scripts/check_c_api_v2.sh` for real C wet-output and lifetime verification.
+Aggregate target hardware admission remains unqualified.
 Loading this library does not open audio/MIDI devices or start the standalone UI.
 
 ## Documentation

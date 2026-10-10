@@ -254,3 +254,13 @@ mouse reporting, and the alternate screen on normal exit and handled errors.
   palette read-only. Check local Markdown links and `git diff --check` before
   committing documentation. A documentation-only pass needs those checks;
   select further tests from actual code changes and the test policy above.
+
+## GigPies task tracking
+
+Use `docs/GIGPIES_IMPLEMENTATION.md` for GigPies work owned here. Keep each task plan,
+implementation state, acceptance checklist, evidence and next action in the same
+card; update it with the change. Shared integration tasks have one card in
+GigPies, linked from contributor plans. STATUS, maps, handoffs and knowledge notes
+route to task owners or preserve dated evidence; never mirror current task state.
+Archive closed cards once; keep the active queue limited to open work. Reference
+projects do not become GigPies runtime modules merely because code is reused.

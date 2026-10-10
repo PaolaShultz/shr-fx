@@ -97,16 +97,16 @@ int32_t shr_fx_v1_status(void *handle, shr_fx_status_v1 *output,
  * reset_count saturates. Queries are serialized snapshots, not atomic observers.
  * Old libraries: resolve ALL v2 symbols; if absent, use complete v1 fixed/read-
  * only API and disable writable controls. Never fake configurable capability. */
-typedef struct shr_fx_channel_v2 {
+typedef struct shr_fx_delay_channel_v2 {
     double delay_ms, feedback, damping, wet_gain;
     uint32_t bypass, reserved;
-} shr_fx_channel_v2;
-typedef struct shr_fx_config_v2 {
+} shr_fx_delay_channel_v2;
+typedef struct shr_fx_delay_config_v2 {
     uint32_t version, size;
     uint64_t expected_generation, generation;
-    shr_fx_channel_v2 channel[2];
-} shr_fx_config_v2;
-typedef struct shr_fx_capabilities_v2 {
+    shr_fx_delay_channel_v2 channel[2];
+} shr_fx_delay_config_v2;
+typedef struct shr_fx_delay_capabilities_v2 {
     uint32_t version, size;
     char identity[32];
     uint32_t min_sample_rate, max_sample_rate, min_block_frames, max_block_frames;
@@ -114,8 +114,8 @@ typedef struct shr_fx_capabilities_v2 {
     double min_delay_ms, max_delay_ms, max_feedback, max_damping, max_wet_gain;
     uint32_t transition_ms, max_read_heads_per_channel;
     uint64_t max_delay_storage_bytes;
-} shr_fx_capabilities_v2;
-typedef struct shr_fx_status_v2 {
+} shr_fx_delay_capabilities_v2;
+typedef struct shr_fx_delay_status_v2 {
     uint32_t version, size, sample_rate, max_block_frames;
     uint32_t transition_frames, transitioning_mask;
     int32_t last_process_result;
@@ -123,22 +123,73 @@ typedef struct shr_fx_status_v2 {
     uint64_t applied_generation, settled_generation;
     uint64_t applied_source_frame, settled_source_frame, next_source_frame, reset_count;
     uint32_t remaining_frames[2];
-    shr_fx_channel_v2 target[2];
-} shr_fx_status_v2;
-void *shr_fx_v2_create(uint32_t sample_rate, uint32_t max_block);
-void *shr_fx_v2_prepare(const shr_fx_config_v2 *config, uint32_t sample_rate,
+    shr_fx_delay_channel_v2 target[2];
+} shr_fx_delay_status_v2;
+void *shr_fx_delay_v2_create(uint32_t sample_rate, uint32_t max_block);
+void *shr_fx_delay_v2_prepare(const shr_fx_delay_config_v2 *config, uint32_t sample_rate,
                         uint32_t version, uint32_t size);
-int32_t shr_fx_v2_commit(void *handle, const void *prepared, uint64_t source_frame);
-void shr_fx_v2_retire(void *prepared);
-int32_t shr_fx_v2_process(void *handle, const double *input, double *output,
+int32_t shr_fx_delay_v2_commit(void *handle, const void *prepared, uint64_t source_frame);
+void shr_fx_delay_v2_retire(void *prepared);
+int32_t shr_fx_delay_v2_process(void *handle, const double *input, double *output,
                          uint32_t frames, uint64_t source_frame);
-int32_t shr_fx_v2_panic(void *handle, uint32_t channel_mask);
-int32_t shr_fx_v2_reset(void *handle, uint64_t next_source_frame);
-int32_t shr_fx_v2_status(void *handle, shr_fx_status_v2 *output,
+int32_t shr_fx_delay_v2_panic(void *handle, uint32_t channel_mask);
+int32_t shr_fx_delay_v2_reset(void *handle, uint64_t next_source_frame);
+int32_t shr_fx_delay_v2_status(void *handle, shr_fx_delay_status_v2 *output,
                         uint32_t version, uint32_t size);
-int32_t shr_fx_v2_capabilities(shr_fx_capabilities_v2 *output,
+int32_t shr_fx_delay_v2_capabilities(shr_fx_delay_capabilities_v2 *output,
                               uint32_t version, uint32_t size);
-void shr_fx_v2_destroy(void *handle);
+void shr_fx_delay_v2_destroy(void *handle);
+
+/* V2 single-owner prepared wet effect. See Architecture's v2 contract.
+ * Never mix v1/v2 handles. All caller storage disjoint from objects/buffers.
+ * Success publish consumes prepared; errors retain caller ownership.
+ * retire transfers a relinquished object; destroy/cancel only off-thread. */
+enum { SHR_FX_V2_OK=0, SHR_FX_V2_ARGUMENT=-1, SHR_FX_V2_CAPACITY=-2,
+ SHR_FX_V2_SAMPLE=-3, SHR_FX_V2_STALE=-4, SHR_FX_V2_DUPLICATE=-5,
+ SHR_FX_V2_SETTINGS=-6, SHR_FX_V2_PANIC=-7 };
+enum { SHR_FX_V2_DELAY=1, SHR_FX_V2_ROOM=2, SHR_FX_V2_CHORUS=3 };
+/* IDs time=1, amount=2, damping=3, rate=4, gain=5, bypass=6.
+ * Units ratio=0, ms=1, Hz=2, boolean=3. unavailable != legitimate zero.
+ * Chorus additionally requires time-amount >=1 and time+amount <=39 ms. */
+typedef struct shr_fx_parameter_v2 {
+ uint32_t version, size, algorithm, parameter, available, unit;
+ double minimum, maximum, default_value;
+} shr_fx_parameter_v2;
+int32_t shr_fx_v2_parameter(uint32_t algorithm, uint32_t parameter,
+ shr_fx_parameter_v2 *out, uint32_t version, uint32_t size);
+typedef struct shr_fx_settings_v2 {
+ uint32_t version, size, algorithm, bypass;
+ double time_ms, amount, damping, rate_hz, gain;
+ uint32_t seed, reserved;
+} shr_fx_settings_v2;
+typedef struct shr_fx_capabilities_v2 {
+ uint32_t version, size, algorithm_mask, sample_bits;
+ uint32_t min_rate, max_rate, max_block, pending_capacity, retired_capacity;
+ uint32_t transition_frames_per_second, max_prepared_bytes, hardware_budget_available;
+} shr_fx_capabilities_v2;
+typedef struct shr_fx_status_v2 {
+ uint32_t version, size, rate, max_block;
+ uint64_t revision, accepted_request, applied_request, last_request;
+ /* last request: 0 none, 1 accepted, 2 swapped, 3 applied, 4 interrupted,
+  * 5 rejected. Revision is the swapped state; applied waits for fade-in. */
+ uint32_t request_state;
+ int32_t request_result; /* Refusal survives subsequent process success. */
+ int32_t last_result;
+ uint32_t fault, transition, intentional_delay_frames;
+ shr_fx_settings_v2 current, target;
+} shr_fx_status_v2;
+int32_t shr_fx_v2_defaults(uint32_t algorithm, shr_fx_settings_v2 *out, uint32_t version, uint32_t size);
+int32_t shr_fx_v2_validate(const shr_fx_settings_v2 *settings);
+int32_t shr_fx_v2_capabilities(shr_fx_capabilities_v2 *out, uint32_t version, uint32_t size);
+void *shr_fx_v2_prepare(uint32_t rate, uint32_t max_block, const shr_fx_settings_v2 *settings);
+void *shr_fx_v2_create(uint32_t rate, uint32_t max_block, const shr_fx_settings_v2 *settings);
+int32_t shr_fx_v2_publish(void *instance, void *prepared, uint64_t request, uint64_t base_revision);
+int32_t shr_fx_v2_process(void *instance, const double *input, double *output, uint32_t frames);
+int32_t shr_fx_v2_reset(void *instance);
+int32_t shr_fx_v2_status(void *instance, shr_fx_status_v2 *out, uint32_t version, uint32_t size);
+void *shr_fx_v2_retire(void *instance);
+void shr_fx_v2_cancel(void *prepared);
+void shr_fx_v2_destroy(void *instance);
 
 #ifdef __cplusplus
 }

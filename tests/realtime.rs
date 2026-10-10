@@ -208,12 +208,12 @@ fn maximum_rate_preparation_stays_within_documented_dsp_budget() {
 
 #[test]
 fn prepared_v2_commit_render_queries_reset_panic_faults_are_allocation_free() {
-    use shr_fx::{c_api::*, c_api_v2::*};
+    use shr_fx::{c_api::*, c_api_delay_v2::*};
     use std::ptr;
     let mut bytes = 0;
     BYTES.with(|c| c.set(0));
     TRACK.with(|c| c.set(true));
-    let handle = shr_fx_v2_create(192000, 8192);
+    let handle = shr_fx_delay_v2_create(192000, 8192);
     TRACK.with(|c| c.set(false));
     BYTES.with(|c| bytes = c.get());
     assert!(!handle.is_null());
@@ -231,42 +231,92 @@ fn prepared_v2_commit_render_queries_reset_panic_faults_are_allocation_free() {
     };
     config.channel[0].delay_ms = 1.0;
     config.channel[1].bypass = 1;
-    let token = unsafe { shr_fx_v2_prepare(&config, 192000, 2, 104) };
+    let token = unsafe { shr_fx_delay_v2_prepare(&config, 192000, 2, 104) };
     assert!(!token.is_null());
     let mut input = vec![0.5 + 2f64.powi(-40); 16384];
     let mut output = vec![0.0; 16384];
     let mut s = StatusV2::default();
     let mut caps = CapabilitiesV2::default();
     tracked(|| unsafe {
-        assert_eq!(shr_fx_v2_commit(handle, token, 0), OK);
-        assert_eq!(shr_fx_v2_status(handle, &mut s, 2, 168), OK);
-        assert_eq!(shr_fx_v2_capabilities(&mut caps, 2, 128), OK);
-        assert_eq!(shr_fx_v2_commit(handle, token, 0), STALE);
+        assert_eq!(shr_fx_delay_v2_commit(handle, token, 0), OK);
+        assert_eq!(shr_fx_delay_v2_status(handle, &mut s, 2, 168), OK);
+        assert_eq!(shr_fx_delay_v2_capabilities(&mut caps, 2, 128), OK);
+        assert_eq!(shr_fx_delay_v2_commit(handle, token, 0), STALE);
         assert_eq!(
-            shr_fx_v2_process(handle, input.as_ptr(), output.as_mut_ptr(), 8192, 0),
+            shr_fx_delay_v2_process(handle, input.as_ptr(), output.as_mut_ptr(), 8192, 0),
             OK
         );
-        assert_eq!(shr_fx_v2_panic(handle, 1), OK);
-        assert_eq!(shr_fx_v2_reset(handle, 8192), OK);
+        assert_eq!(shr_fx_delay_v2_panic(handle, 1), OK);
+        assert_eq!(shr_fx_delay_v2_reset(handle, 8192), OK);
         input[16383] = f64::NAN;
         assert_eq!(
-            shr_fx_v2_process(handle, input.as_ptr(), output.as_mut_ptr(), 8192, 8192),
+            shr_fx_delay_v2_process(handle, input.as_ptr(), output.as_mut_ptr(), 8192, 8192),
             INVALID_SAMPLE
         );
         assert_eq!(
-            shr_fx_v2_process(handle, ptr::null(), ptr::null_mut(), 8193, 8192),
+            shr_fx_delay_v2_process(handle, ptr::null(), ptr::null_mut(), 8193, 8192),
             CAPACITY
         );
         input.fill(0.0);
         assert_eq!(
-            shr_fx_v2_process(handle, input.as_ptr(), output.as_mut_ptr(), 8192, 8192),
+            shr_fx_delay_v2_process(handle, input.as_ptr(), output.as_mut_ptr(), 8192, 8192),
             OK
         );
         assert!(output.iter().all(|x| *x == 0.0));
     });
     // Only the control owner retires/frees either object, after all render calls.
     unsafe {
-        shr_fx_v2_retire(token);
-        shr_fx_v2_destroy(handle)
+        shr_fx_delay_v2_retire(token);
+        shr_fx_delay_v2_destroy(handle)
     };
+}
+
+#[test]
+fn writable_embedding_publication_transition_reset_and_retirement_are_allocation_free() {
+    use shr_fx::c_api_v2::*;
+    for algorithm in [1, 2, 3] {
+        let mut s = Settings::default();
+        unsafe {
+            assert_eq!(
+                shr_fx_v2_defaults(algorithm, &mut s, 2, size_of::<Settings>() as u32),
+                0
+            );
+            BYTES.with(|c| c.set(0));
+            TRACK.with(|c| c.set(true));
+            let h = shr_fx_v2_create(192000, 8192, &s);
+            let mut target = s;
+            target.gain = 0.25;
+            let p = shr_fx_v2_prepare(192000, 8192, &target);
+            TRACK.with(|c| c.set(false));
+            assert!(BYTES.with(Cell::get) < 16 * 1024 * 1024);
+            let input = [0.5; 16384];
+            let mut out = [0.0; 16384];
+            let mut retired = std::ptr::null_mut();
+            tracked(|| {
+                assert_eq!(shr_fx_v2_publish(h, p, 1, 0), 0);
+                assert_eq!(
+                    shr_fx_v2_process(h, input.as_ptr(), out.as_mut_ptr(), 8192),
+                    0
+                );
+                retired = shr_fx_v2_retire(h);
+                assert!(!retired.is_null());
+                assert_eq!(shr_fx_v2_reset(h), 0);
+                assert_eq!(
+                    shr_fx_v2_process(h, [f64::NAN, 0.0].as_ptr(), out.as_mut_ptr(), 1),
+                    -3
+                );
+                assert_eq!(shr_fx_v2_reset(h), 0);
+            });
+            shr_fx_v2_cancel(retired);
+            // Reset with a pending edit must relinquish without destruction.
+            let p = shr_fx_v2_prepare(192000, 8192, &s);
+            tracked(|| {
+                assert_eq!(shr_fx_v2_publish(h, p, 2, 1), 0);
+                assert_eq!(shr_fx_v2_reset(h), 0);
+                retired = shr_fx_v2_retire(h);
+            });
+            shr_fx_v2_cancel(retired);
+            shr_fx_v2_destroy(h);
+        }
+    }
 }

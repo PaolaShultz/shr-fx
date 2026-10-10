@@ -108,6 +108,9 @@ bypass/tails and selected panic are implemented. The fixed v1 adapter and
 [original E07 corpus](../tests/fixtures/cfx/v1/README.md) remain compatible.
 Software check results belong to [Acceptance](ACCEPTANCE.md); exact build and
 contract identities are retained with the [v2 owner corpus](../tests/fixtures/cfx/v2/README.md).
+[Owning GigPies plan](GIGPIES_IMPLEMENTATION.md) owns module-only plans and implementation progress in the same task cards.
+Shared integration work is linked to its GigPies owner; dated evidence above
+retains its original scope.
 
 Next owner/action: GigPies independently reviews this owner package and implements
 source-indexed return composition and old-library fallback; Desk consumes that

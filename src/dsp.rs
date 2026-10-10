@@ -497,69 +497,165 @@ impl PreparedWetChannel {
     }
 }
 
-struct Comb {
-    ring: Ring,
-    length: f32,
-    low: f32,
+struct ChorusParameters<S: DelaySample> {
+    base_ms: S,
+    depth_ms: S,
+    rate_hz: S,
+    ensemble: bool,
 }
-impl Comb {
-    fn new(rate: f32) -> Self {
+impl From<crate::model::ChorusConfig> for ChorusParameters<f32> {
+    fn from(c: crate::model::ChorusConfig) -> Self {
         Self {
-            ring: Ring::new((rate * 0.12) as usize + 4),
-            length: 1.0,
-            low: 0.0,
+            base_ms: c.base_ms,
+            depth_ms: c.depth_ms,
+            rate_hz: c.rate_hz,
+            ensemble: c.ensemble,
+        }
+    }
+}
+struct Comb<S: DelaySample = f32> {
+    ring: Ring<S>,
+    length: S,
+    low: S,
+}
+impl<S: DelaySample> Comb<S> {
+    fn new(rate: S) -> Self {
+        Self {
+            ring: Ring::new((rate * S::from_f64(0.12)).as_usize() + 4),
+            length: S::from_f64(1.0),
+            low: S::from_f64(0.0),
         }
     }
     fn clear(&mut self) {
         self.ring.clear();
-        self.low = 0.0;
+        self.low = S::from_f64(0.0);
     }
-    fn tick(&mut self, input: f32, feedback: f32, damping: f32) -> f32 {
+    fn tick(&mut self, input: S, feedback: S, damping: S) -> S {
         let out = self.ring.read(self.length);
-        self.low = clean(self.low * damping + out * (1.0 - damping));
+        self.low = clean(self.low * damping + out * (S::from_f64(1.0) - damping));
         self.ring
-            .push(input * (1.0 - feedback) + self.low * feedback);
+            .push(input * (S::from_f64(1.0) - feedback) + self.low * feedback);
         out
     }
 }
-struct Room {
-    predelay: [Ring; 2],
-    tap: Tap,
-    combs: [[Comb; 4]; 2],
-    input_diffusers: [[Allpass; 2]; 2],
-    diffusers: [[Allpass; 4]; 2],
+struct Room<S: DelaySample = f32> {
+    predelay: [Ring<S>; 2],
+    tap: Tap<S>,
+    combs: [[Comb<S>; 4]; 2],
+    input_diffusers: [[Allpass<S>; 2]; 2],
+    diffusers: [[Allpass<S>; 4]; 2],
     kind: ReverbKind,
 }
-impl Room {
-    fn new(rate: f32, predelay: f32, kind: ReverbKind) -> Self {
+impl<S: DelaySample> Room<S> {
+    fn new(rate: S, predelay: S, kind: ReverbKind) -> Self {
         let mut room = Self {
-            predelay: std::array::from_fn(|_| Ring::new((rate * 0.2) as usize + 4)),
-            tap: Tap::new((predelay * rate / 1000.0).max(1.0), rate),
+            predelay: std::array::from_fn(|_| Ring::new((rate * S::from_f64(0.2)).as_usize() + 4)),
+            tap: Tap::new(
+                (predelay * rate / S::from_f64(1000.0)).max(S::from_f64(1.0)),
+                rate,
+            ),
             combs: std::array::from_fn(|_| std::array::from_fn(|_| Comb::new(rate))),
             input_diffusers: std::array::from_fn(|c| {
-                std::array::from_fn(|n| Allpass::new(rate, [7.1, 3.3][n] + c as f32 * 0.2))
+                std::array::from_fn(|n| {
+                    Allpass::new(
+                        rate,
+                        [S::from_f64(7.1), S::from_f64(3.3)][n]
+                            + S::from_f64(c as f64) * S::from_f64(0.2),
+                    )
+                })
             }),
-            diffusers: std::array::from_fn(|_| std::array::from_fn(|_| Allpass::new(rate, 1.0))),
+            diffusers: std::array::from_fn(|_| {
+                std::array::from_fn(|_| Allpass::new(rate, S::from_f64(1.0)))
+            }),
             kind,
         };
         room.configure(rate, kind);
         room
     }
-    fn configure(&mut self, rate: f32, kind: ReverbKind) {
+    fn configure(&mut self, rate: S, kind: ReverbKind) {
         self.kind = kind;
         let (lengths, diffusion) = match kind {
-            ReverbKind::Room => ([29.7, 37.1, 41.1, 43.7], [5.0, 1.7, 1.0, 1.0]),
-            ReverbKind::SmallRoom => ([11.3, 13.7, 17.9, 19.3], [3.1, 0.9, 1.0, 1.0]),
-            ReverbKind::Chamber => ([31.1, 39.7, 47.3, 53.9], [7.7, 3.1, 1.0, 1.0]),
-            ReverbKind::Plate => ([17.3, 23.9, 31.1, 37.7], [9.1, 5.3, 2.7, 1.1]),
-            ReverbKind::Hall => ([67.7, 79.3, 97.1, 113.7], [14.7, 9.3, 5.1, 2.3]),
+            ReverbKind::Room => (
+                [
+                    S::from_f64(29.7),
+                    S::from_f64(37.1),
+                    S::from_f64(41.1),
+                    S::from_f64(43.7),
+                ],
+                [
+                    S::from_f64(5.0),
+                    S::from_f64(1.7),
+                    S::from_f64(1.0),
+                    S::from_f64(1.0),
+                ],
+            ),
+            ReverbKind::SmallRoom => (
+                [
+                    S::from_f64(11.3),
+                    S::from_f64(13.7),
+                    S::from_f64(17.9),
+                    S::from_f64(19.3),
+                ],
+                [
+                    S::from_f64(3.1),
+                    S::from_f64(0.9),
+                    S::from_f64(1.0),
+                    S::from_f64(1.0),
+                ],
+            ),
+            ReverbKind::Chamber => (
+                [
+                    S::from_f64(31.1),
+                    S::from_f64(39.7),
+                    S::from_f64(47.3),
+                    S::from_f64(53.9),
+                ],
+                [
+                    S::from_f64(7.7),
+                    S::from_f64(3.1),
+                    S::from_f64(1.0),
+                    S::from_f64(1.0),
+                ],
+            ),
+            ReverbKind::Plate => (
+                [
+                    S::from_f64(17.3),
+                    S::from_f64(23.9),
+                    S::from_f64(31.1),
+                    S::from_f64(37.7),
+                ],
+                [
+                    S::from_f64(9.1),
+                    S::from_f64(5.3),
+                    S::from_f64(2.7),
+                    S::from_f64(1.1),
+                ],
+            ),
+            ReverbKind::Hall => (
+                [
+                    S::from_f64(67.7),
+                    S::from_f64(79.3),
+                    S::from_f64(97.1),
+                    S::from_f64(113.7),
+                ],
+                [
+                    S::from_f64(14.7),
+                    S::from_f64(9.3),
+                    S::from_f64(5.1),
+                    S::from_f64(2.3),
+                ],
+            ),
         };
         for c in 0..2 {
             for (n, comb) in self.combs[c].iter_mut().enumerate() {
-                comb.length = (rate * (lengths[n] + c as f32 * 1.3) / 1000.0).round();
+                comb.length = (rate * (lengths[n] + S::from_f64(c as f64) * S::from_f64(1.3))
+                    / S::from_f64(1000.0))
+                .round();
             }
             for (n, a) in self.diffusers[c].iter_mut().enumerate() {
-                a.length = (rate * (diffusion[n] + c as f32 * 0.3) / 1000.0).round();
+                a.length = (rate * (diffusion[n] + S::from_f64(c as f64) * S::from_f64(0.3))
+                    / S::from_f64(1000.0))
+                .round();
             }
         }
     }
@@ -583,25 +679,25 @@ impl Room {
             }
         }
     }
-    fn tick(&mut self, input: [f32; 2], predelay: f32, decay: f32, damping: f32) -> [f32; 2] {
-        self.tap.advance(predelay.max(1.0));
+    fn tick(&mut self, input: [S; 2], predelay: S, decay: S, damping: S) -> [S; 2] {
+        self.tap.advance(predelay.max(S::from_f64(1.0)));
         let dense = matches!(
             self.kind,
             ReverbKind::Chamber | ReverbKind::Plate | ReverbKind::Hall
         );
         let four = matches!(self.kind, ReverbKind::Plate | ReverbKind::Hall);
         let feedback = match self.kind {
-            ReverbKind::Room => 0.45 + decay * 0.5,
-            ReverbKind::SmallRoom => 0.32 + decay * 0.5,
-            ReverbKind::Chamber => 0.52 + decay * 0.42,
-            ReverbKind::Plate => 0.6 + decay * 0.32,
-            ReverbKind::Hall => 0.62 + decay * 0.3,
+            ReverbKind::Room => S::from_f64(0.45) + decay * S::from_f64(0.5),
+            ReverbKind::SmallRoom => S::from_f64(0.32) + decay * S::from_f64(0.5),
+            ReverbKind::Chamber => S::from_f64(0.52) + decay * S::from_f64(0.42),
+            ReverbKind::Plate => S::from_f64(0.6) + decay * S::from_f64(0.32),
+            ReverbKind::Hall => S::from_f64(0.62) + decay * S::from_f64(0.3),
         };
         std::array::from_fn(|c| {
             let mut delayed = self.tap.read(&self.predelay[c]);
             // The original Room and Small room preserve stereo channel isolation.
             self.predelay[c].push(if dense {
-                input[c] * 0.85 + input[1 - c] * 0.15
+                input[c] * S::from_f64(0.85) + input[1 - c] * S::from_f64(0.15)
             } else {
                 input[c]
             });
@@ -610,27 +706,31 @@ impl Room {
                     delayed = a.tick(delayed);
                 }
             }
-            let mut out = 0.0;
+            let mut out = S::from_f64(0.0);
             for comb in &mut self.combs[c] {
-                out += comb.tick(delayed, feedback, damping) * 0.25;
+                out += comb.tick(delayed, feedback, damping) * S::from_f64(0.25);
             }
             for a in &mut self.diffusers[c][..if four { 4 } else { 2 }] {
                 out = a.tick(out);
             }
-            out * if four { 0.65 } else { 1.0 }
+            out * if four {
+                S::from_f64(0.65)
+            } else {
+                S::from_f64(1.0)
+            }
         })
     }
 }
-struct Chorus {
-    rings: [Ring; 2],
-    phases: [f32; 3],
-    seed: f32,
+struct Chorus<S: DelaySample = f32> {
+    rings: [Ring<S>; 2],
+    phases: [S; 3],
+    seed: S,
 }
-impl Chorus {
-    fn new(rate: f32, seed: f32) -> Self {
+impl<S: DelaySample> Chorus<S> {
+    fn new(rate: S, seed: S) -> Self {
         let mut chorus = Self {
-            rings: std::array::from_fn(|_| Ring::new((rate * 0.04) as usize + 4)),
-            phases: [0.0; 3],
+            rings: std::array::from_fn(|_| Ring::new((rate * S::from_f64(0.04)).as_usize() + 4)),
+            phases: [S::from_f64(0.0); 3],
             seed,
         };
         chorus.clear();
@@ -640,21 +740,26 @@ impl Chorus {
         for ring in &mut self.rings {
             ring.clear();
         }
-        self.phases = std::array::from_fn(|n| (self.seed + n as f32 * 0.27).fract());
+        self.phases = std::array::from_fn(|n| {
+            (self.seed + S::from_f64(n as f64) * S::from_f64(0.27)).fract()
+        });
     }
-    fn tick(&mut self, input: [f32; 2], config: crate::model::ChorusConfig, rate: f32) -> [f32; 2] {
+    fn tick(&mut self, input: [S; 2], config: ChorusParameters<S>, rate: S) -> [S; 2] {
         let voices = if config.ensemble { 3 } else { 1 };
-        let mut out = [0.0; 2];
+        let mut out = [S::from_f64(0.0); 2];
         for voice in 0..voices {
             oscillator(
                 &mut self.phases[voice],
-                config.rate_hz * (1.0 + voice as f32 * 0.13) / rate,
+                config.rate_hz * (S::from_f64(1.0) + S::from_f64(voice as f64) * S::from_f64(0.13))
+                    / rate,
             );
             for (c, sample) in out.iter_mut().enumerate() {
-                let mut phase = (self.phases[voice] + c as f32 * 0.25).fract();
-                let modulation = oscillator(&mut phase, 0.0);
+                let mut phase =
+                    (self.phases[voice] + S::from_f64(c as f64) * S::from_f64(0.25)).fract();
+                let modulation = oscillator(&mut phase, S::from_f64(0.0));
                 let ms = config.base_ms + config.depth_ms * modulation;
-                *sample += self.rings[c].read(ms * rate / 1000.0) / voices as f32;
+                *sample += self.rings[c].read(ms * rate / S::from_f64(1000.0))
+                    / S::from_f64(voices as f64);
             }
         }
         for (c, sample) in input.into_iter().enumerate() {
@@ -804,7 +909,8 @@ impl Slot {
                     100.0 / self.rate,
                 );
                 self.smooth.chorus.ensemble = self.active.chorus.ensemble;
-                self.chorus.tick(input, self.smooth.chorus, self.rate)
+                self.chorus
+                    .tick(input, self.smooth.chorus.into(), self.rate)
             }
             Algorithm::Exciter => {
                 slew(
@@ -1104,6 +1210,90 @@ impl Processor {
             }
         }
         meters
+    }
+}
+
+/// Native precision specializations of the standalone wet algorithms.
+// Inline variants avoid another preparation allocation; all are bounded.
+#[allow(private_interfaces, clippy::large_enum_variant)]
+pub(crate) enum EmbeddedEffect {
+    Delay(Delay<f64>),
+    Room(Room<f64>),
+    Chorus(Chorus<f64>),
+}
+impl EmbeddedEffect {
+    pub(crate) fn new(rate: u32, s: &crate::c_api_v2::Settings) -> Self {
+        let rate = rate as f64;
+        match s.algorithm {
+            1 => Self::Delay(Delay::new(
+                rate,
+                (s.time_ms * rate / 1000.0).round() * 1000.0 / rate,
+                s.seed as f64 / 4294967296.0,
+            )),
+            2 => Self::Room(Room::new(rate, s.time_ms, ReverbKind::Room)),
+            _ => Self::Chorus(Chorus::new(rate, s.seed as f64 / 4294967296.0)),
+        }
+    }
+    pub(crate) fn overlaps(&self, start: usize, end: usize) -> bool {
+        let overlap = |r: &Ring<f64>| {
+            let a = r.data.as_ptr() as usize;
+            start < a + r.data.capacity() * 8 && a < end
+        };
+        match self {
+            Self::Delay(x) => {
+                x.rings.iter().any(overlap)
+                    || x.diffusers.iter().flatten().any(|a| overlap(&a.ring))
+            }
+            Self::Room(x) => {
+                x.predelay.iter().any(overlap)
+                    || x.combs.iter().flatten().any(|a| overlap(&a.ring))
+                    || x.diffusers.iter().flatten().any(|a| overlap(&a.ring))
+                    || x.input_diffusers.iter().flatten().any(|a| overlap(&a.ring))
+            }
+            Self::Chorus(x) => x.rings.iter().any(overlap),
+        }
+    }
+    pub(crate) fn clear(&mut self) {
+        match self {
+            Self::Delay(x) => x.clear(),
+            Self::Room(x) => x.clear(),
+            Self::Chorus(x) => x.clear(),
+        }
+    }
+    pub(crate) fn tick(
+        &mut self,
+        input: [f64; 2],
+        rate: u32,
+        s: &crate::c_api_v2::Settings,
+    ) -> [f64; 2] {
+        let input = if s.bypass == 1 { [0.0; 2] } else { input };
+        let rate = rate as f64;
+        let out = match self {
+            Self::Delay(x) => x.tick(
+                input,
+                (s.time_ms * rate / 1000.0).round(),
+                DelayParameters {
+                    kind: DelayKind::Digital,
+                    feedback: s.amount,
+                    damping: s.damping,
+                    ping_pong: false,
+                },
+                rate,
+                false,
+            ),
+            Self::Room(x) => x.tick(input, s.time_ms * rate / 1000.0, s.amount, s.damping),
+            Self::Chorus(x) => x.tick(
+                input,
+                ChorusParameters {
+                    base_ms: s.time_ms,
+                    depth_ms: s.amount,
+                    rate_hz: s.rate_hz,
+                    ensemble: false,
+                },
+                rate,
+            ),
+        };
+        out.map(|x| clean(x * s.gain))
     }
 }
 
